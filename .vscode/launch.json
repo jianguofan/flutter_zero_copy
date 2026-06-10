@@ -36,29 +36,11 @@
         },
 
         {
-            "name": "C++ Attach to cube_renderer (lldb)",
+            "name": "C++ Attach to cube_renderer (pick PID)",
             "type": "lldb",
             "request": "attach",
             "program": "${workspaceFolder}/cube_renderer/build/cube_renderer",
             "pid": "${command:pickProcess}"
-        },
-        {
-            "name": "C++ Attach to cube_renderer (by name)",
-            "type": "lldb",
-            "request": "attach",
-            "program": "${workspaceFolder}/cube_renderer/build/cube_renderer",
-            "processName": "cube_renderer"
-        }
-    ],
-    "compounds": [
-        {
-            "name": "Flutter + C++ (full debug)",
-            "configurations": [
-                "Flutter macOS (Debug)"
-            ],
-            "presentation": {
-                "order": 1
-            }
         }
     ]
 }

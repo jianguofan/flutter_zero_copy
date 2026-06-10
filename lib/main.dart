@@ -190,7 +190,8 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
   double _height = 450;
   double _left = 30;
   double _top = 80;
-  bool _showCube = true; // Auto-start
+  bool _showCube = true;
+  bool _debugCpp = false; // 需要调试 C++ 时打开
   int _key = 0;
 
   @override
@@ -213,6 +214,7 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
                 height: _height,
                 left: _left,
                 top: _top,
+                debugCpp: _debugCpp,
               ),
             Positioned(right: 20, top: 20, child: _controlPanel()),
           ],
@@ -244,6 +246,18 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
             style: ElevatedButton.styleFrom(
               backgroundColor: _showCube ? Colors.redAccent : Colors.green,
             ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Debug C++', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Spacer(),
+              Switch(
+                value: _debugCpp,
+                activeColor: Colors.orangeAccent,
+                onChanged: (v) => setState(() => _debugCpp = v),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _slider('W', _width, 200, 1200, (v) => _width = v),

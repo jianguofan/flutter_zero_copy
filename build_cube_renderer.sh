@@ -26,6 +26,12 @@ cd "$BUILD_DIR"
 make -j"$(sysctl -n hw.ncpu)"
 
 echo ""
+# Sign the binary (required by macOS, otherwise taskgated kills it)
+echo ""
+echo "=== Signing binary ==="
+codesign --sign - --force "$BUILD_DIR/cube_renderer" 2>/dev/null && echo "✓ Signed with ad-hoc signature"
+
+echo ""
 echo "=== Build complete ==="
 echo "Binary: $BUILD_DIR/cube_renderer"
 echo ""
