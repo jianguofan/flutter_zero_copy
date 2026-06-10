@@ -222,6 +222,48 @@ static void quatToMatrix(const Quat& q, float* m) {
     m[15] = 1.0f;
 }
 
+// ---------------------------------------------------------------------------
+// Camera state (controlled via stdin commands)
+// ---------------------------------------------------------------------------
+
+struct Camera {
+    Quat   orientation = Quat();  // identity = no rotation
+    float  zoom        = 6.0f;
+    float  minZoom     = 1.5f;
+    float  maxZoom     = 20.0f;
+    float  sensitivity = 0.005f;
+    bool   autoRotate  = false;
+    float  autoRotateAngle = 0.0f;    // accumulated auto-rotation angle
+    float  idleTimer       = 2.0f;    // seconds since last user input
+
+    void rotate(float dx, float dy) {
+        // Build arcball: track mouse delta as movement on the unit sphere
+        float radius = 300.0f;  // arcball radius in pixels (matches typical widget size)
+        vec3 from = screenToSphere(0, 0, radius);
+        vec3 to   = screenToSphere(dx * sensitivity * 100.0f,
+                                    dy * sensitivity * 100.0f, radius);
+        Quat delta = rotationBetween(from, to);
+        orientation = quatMul(delta, orientation);  // pre-multiply: delta * current
+        idleTimer = 2.0f;  // reset auto-rotation timer
+    }
+
+    void zoomBy(float delta) {
+        zoom -= delta * 0.01f;  // scale arbitrary: 1 wheel tick ≈ 0.01 distance
+        if (zoom < minZoom) zoom = minZoom;
+        if (zoom > maxZoom) zoom = maxZoom;
+        idleTimer = 2.0f;
+    }
+
+    void reset() {
+        orientation = Quat();  // identity
+        zoom = 6.0f;
+        autoRotateAngle = 0.0f;
+        idleTimer = 2.0f;
+    }
+};
+
+static Camera g_camera;
+
 static void signalHandler(int) {
     g_running = false;
 }
