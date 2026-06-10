@@ -1,0 +1,30 @@
+# Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# macOS
+macos/Pods/
+macos/.symlinks/
+macos/Flutter/ephemeral/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# C++ build artifacts
+cube_renderer/build/
+
+# IDE
+.vscode/
+.idea/
+
+# Superpowers
+.superpowers/
+
+# macOS
+.DS_Store
+
+# Test artifacts
+test_iosurface
