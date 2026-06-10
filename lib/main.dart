@@ -57,6 +57,17 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
     _initialize();
   }
 
+  @override
+  void didUpdateWidget(ZeroCopyWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.autoRotate != widget.autoRotate) {
+      _sendCommand({
+        'type': 'config',
+        'autoRotate': widget.autoRotate,
+      });
+    }
+  }
+
   Future<void> _initialize() async {
     try {
       final result = await _channel.invokeMethod('createSurface', {
