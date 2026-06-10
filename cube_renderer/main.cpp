@@ -117,6 +117,111 @@ static GLuint g_fbo = 0, g_colorTexture = 0, g_depthBuffer = 0;
 static CGLContextObj g_cglCtx = nullptr;
 static IOSurfaceRef g_surface = nullptr;
 
+// ---------------------------------------------------------------------------
+// Math primitives for arcball
+// ---------------------------------------------------------------------------
+
+struct vec3 {
+    float x, y, z;
+    vec3() : x(0), y(0), z(0) {}
+    vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+};
+
+static vec3 cross(const vec3& a, const vec3& b) {
+    return vec3(a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x);
+}
+
+static float dot(const vec3& a, const vec3& b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+static float clamp(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+struct Quat {
+    float w, x, y, z;
+    Quat() : w(1), x(0), y(0), z(0) {}  // identity
+    Quat(float w_, float x_, float y_, float z_) : w(w_), x(x_), y(y_), z(z_) {}
+};
+
+// Screen coords → point on unit hemisphere (arcball projection)
+static vec3 screenToSphere(float sx, float sy, float radius) {
+    float x =  sx / radius;
+    float y = -sy / radius;  // Y flip: screen Y is down, GL Y is up
+    float z2 = 1.0f - x * x - y * y;
+    float z = z2 > 0.0f ? sqrtf(z2) : 0.0f;
+    // Normalize to unit sphere surface
+    // When outside the sphere (z==0), project to equator ring
+    float len = sqrtf(x * x + y * y + z * z);
+    if (len < 0.0001f) return vec3(0, 0, 1);
+    return vec3(x / len, y / len, z / len);
+}
+
+// Quaternion representing rotation from vector 'from' to vector 'to'
+static Quat rotationBetween(const vec3& from, const vec3& to) {
+    float d = clamp(dot(from, to), -1.0f, 1.0f);
+    // Vectors nearly parallel → identity quaternion
+    if (d > 0.9999f) return Quat(1, 0, 0, 0);
+    // Vectors nearly opposite → 180° around arbitrary perpendicular axis
+    if (d < -0.9999f) {
+        vec3 axis = cross(vec3(1, 0, 0), from);
+        float axLen = sqrtf(dot(axis, axis));
+        if (axLen < 0.0001f) axis = cross(vec3(0, 1, 0), from);
+        axLen = sqrtf(dot(axis, axis));
+        return Quat(0, axis.x / axLen, axis.y / axLen, axis.z / axLen);
+    }
+    vec3 axis = cross(from, to);
+    float angle = acosf(d);
+    float s = sinf(angle * 0.5f);
+    float axLen = sqrtf(dot(axis, axis));
+    return Quat(cosf(angle * 0.5f),
+                axis.x * s / axLen,
+                axis.y * s / axLen,
+                axis.z * s / axLen);
+}
+
+// Multiply two quaternions: q = a * b
+static Quat quatMul(const Quat& a, const Quat& b) {
+    return Quat(
+        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w
+    );
+}
+
+// Quaternion → 4x4 column-major rotation matrix
+static void quatToMatrix(const Quat& q, float* m) {
+    float xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
+    float xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
+    float wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+
+    m[0]  = 1.0f - 2.0f * (yy + zz);
+    m[1]  = 2.0f * (xy + wz);
+    m[2]  = 2.0f * (xz - wy);
+    m[3]  = 0.0f;
+
+    m[4]  = 2.0f * (xy - wz);
+    m[5]  = 1.0f - 2.0f * (xx + zz);
+    m[6]  = 2.0f * (yz + wx);
+    m[7]  = 0.0f;
+
+    m[8]  = 2.0f * (xz + wy);
+    m[9]  = 2.0f * (yz - wx);
+    m[10] = 1.0f - 2.0f * (xx + yy);
+    m[11] = 0.0f;
+
+    m[12] = 0.0f;
+    m[13] = 0.0f;
+    m[14] = 0.0f;
+    m[15] = 1.0f;
+}
+
 static void signalHandler(int) {
     g_running = false;
 }
