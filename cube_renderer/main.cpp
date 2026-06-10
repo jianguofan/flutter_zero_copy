@@ -260,6 +260,7 @@ struct Camera {
         orientation = Quat();  // identity
         zoom = 6.0f;
         autoRotateAngle = 0.0f;
+        autoRotate = false;
         idleTimer = 2.0f;
     }
 };
@@ -401,7 +402,7 @@ static void setupCube() {
 // Create perspective MVP matrix (simple)
 // ---------------------------------------------------------------------------
 
-static void computeMVP(float* mvp, float angle, int width, int height) {
+static void computeMVP(float* mvp, const Camera& cam, int width, int height) {
     float aspect = (float)width / (float)height;
 
     // Projection: perspective 45° FOV
@@ -416,25 +417,19 @@ static void computeMVP(float* mvp, float angle, int width, int height) {
         0, 0, (2 * far * near) / (near - far), 0
     };
 
-    // View: camera at (0, 0, 3), looking at origin
+    // View: camera at distance zoom from origin, looking at (0,0,0)
     float view[16] = {
         1, 0, 0, 0,
         0, 1, 0, 0,
         0, 0, 1, 0,
-        0, 0, -3, 1
+        0, 0, -cam.zoom, 1
     };
 
-    // Model: rotation around Y axis
-    float cosA = cosf(angle), sinA = sinf(angle);
-    float model[16] = {
-        cosA,  0, sinA, 0,
-        0,     1, 0,    0,
-       -sinA,  0, cosA, 0,
-        0,     0, 0,    1
-    };
+    // Model: arcball quaternion → rotation matrix
+    float model[16];
+    quatToMatrix(cam.orientation, model);
 
-    // Column-major matrix multiply: out = a * b
-    // All matrices stored column-major: element(row, col) is at index[col*4+row]
+    // Column-major multiply: out = a * b
     auto mul = [](const float* a, const float* b, float* out) {
         for (int i = 0; i < 16; i++) out[i] = 0;
         for (int col = 0; col < 4; col++)
@@ -443,6 +438,7 @@ static void computeMVP(float* mvp, float angle, int width, int height) {
                     out[col * 4 + row] += a[k * 4 + row] * b[col * 4 + k];
     };
 
+    // MVP = proj * view * model
     float viewModel[16];
     mul(view, model, viewModel);
     mul(proj, viewModel, mvp);
@@ -625,6 +621,10 @@ int main(int argc, char* argv[]) {
     }
     printf("[cube_renderer] FBO complete\n");
 
+    // Set stdin non-blocking for command reception
+    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+    printf("[cube_renderer] stdin set to non-blocking mode\n");
+
     // ── 4. Setup cube geometry and shader ──────────────────────────
     setupCube();
     g_program = createProgram(vertexShaderSource, fragmentShaderSource);
@@ -703,42 +703,52 @@ int main(int argc, char* argv[]) {
     // ── 5. Render loop ─────────────────────────────────────────────
     printf("[cube_renderer] Entering cube render loop...\n");
 
-    float angle = 0.0f;
-    const float anglePerFrame = 0.02f;
     int frameCount = 0;
 
     while (g_running) {
+        // ── Process stdin commands ──────────────────────────────────
+        readCommands(g_camera);
+
+        // ── Update auto-rotation timer ─────────────────────────────
+        float dt = 0.0167f;
+        if (g_camera.idleTimer > 0.0f) {
+            g_camera.idleTimer -= dt;
+            if (g_camera.idleTimer < 0.0f) g_camera.idleTimer = 0.0f;
+        }
+
         glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
         glViewport(0, 0, surfW, surfH);
 
-        // Alternate between red and blue clear every 30 frames for visibility
+        // Alternate clear color for visibility
         if ((frameCount / 30) % 2 == 0) {
-            glClearColor(0.3f, 0.15f, 0.15f, 1.0f);  // dark red
+            glClearColor(0.3f, 0.15f, 0.15f, 1.0f);
         } else {
-            glClearColor(0.15f, 0.15f, 0.35f, 1.0f);  // dark blue
+            glClearColor(0.15f, 0.15f, 0.35f, 1.0f);
         }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
 
-        float mvp[16];
-        computeMVP(mvp, angle, surfW, surfH);
+        // Build a temporary camera that includes auto-rotation
+        Camera frameCam = g_camera;
+        if (g_camera.autoRotate && g_camera.idleTimer <= 0.0f) {
+            // Increment auto-rotation angle and build Y-axis rotation quat
+            g_camera.autoRotateAngle += 0.02f;
+            float halfA = g_camera.autoRotateAngle * 0.5f;
+            Quat autoY(cosf(halfA), 0.0f, sinf(halfA), 0.0f);
+            frameCam.orientation = quatMul(autoY, g_camera.orientation);
+        }
 
-        // Debug: print MVP and a sample vertex transform every 60 frames
+        float mvp[16];
+        computeMVP(mvp, frameCam, surfW, surfH);
+
+        // Debug: print every 60 frames
         if (frameCount % 60 == 0) {
-            printf("[cube_renderer] Frame %d, angle=%.2f\n", frameCount, angle);
+            printf("[cube_renderer] Frame %d, zoom=%.2f, idleTimer=%.2f\n",
+                   frameCount, g_camera.zoom, g_camera.idleTimer);
             printf("  MVP row0: [%.3f, %.3f, %.3f, %.3f]\n", mvp[0], mvp[4], mvp[8], mvp[12]);
             printf("  MVP row1: [%.3f, %.3f, %.3f, %.3f]\n", mvp[1], mvp[5], mvp[9], mvp[13]);
             printf("  MVP row2: [%.3f, %.3f, %.3f, %.3f]\n", mvp[2], mvp[6], mvp[10], mvp[14]);
             printf("  MVP row3: [%.3f, %.3f, %.3f, %.3f]\n", mvp[3], mvp[7], mvp[11], mvp[15]);
-
-            // Manually transform vertex (0.5, 0.5, 0.5) — front top right corner
-            float vx = 0.5f, vy = 0.5f, vz = 0.5f;
-            float cx = mvp[0]*vx + mvp[4]*vy + mvp[8]*vz + mvp[12];
-            float cy = mvp[1]*vx + mvp[5]*vy + mvp[9]*vz + mvp[13];
-            float cz = mvp[2]*vx + mvp[6]*vy + mvp[10]*vz + mvp[14];
-            float cw = mvp[3]*vx + mvp[7]*vy + mvp[11]*vz + mvp[15];
-            printf("  Projected (0.5,0.5,0.5): clip=(%.2f,%.2f,%.2f,%.2f) ndc=(%.2f,%.2f)\n",
-                   cx, cy, cz, cw, cx/cw, cy/cw);
         }
 
         glUseProgram(g_program);
@@ -749,7 +759,6 @@ int main(int argc, char* argv[]) {
         glBindVertexArray(0);
         glUseProgram(0);
 
-        // Check GL errors every 60 frames
         if (frameCount % 60 == 0) {
             GLenum glErr = glGetError();
             if (glErr != GL_NO_ERROR) {
@@ -758,11 +767,7 @@ int main(int argc, char* argv[]) {
         }
 
         glFlush();
-
-        angle += anglePerFrame;
-        if (angle > 2.0f * M_PI) angle -= 2.0f * M_PI;
         frameCount++;
-
         usleep(16667);
     }
 
