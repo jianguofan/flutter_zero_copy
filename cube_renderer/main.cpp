@@ -21,6 +21,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <unistd.h>
+#include <fcntl.h>
+#include <string>
 #include <sys/types.h>
 #include <sys/sysctl.h>
 
@@ -263,6 +265,65 @@ struct Camera {
 };
 
 static Camera g_camera;
+
+// ---------------------------------------------------------------------------
+// Non-blocking stdin reader (receives JSON commands from Flutter)
+// ---------------------------------------------------------------------------
+
+static std::string g_stdinBuf;
+
+// Extract float value for a given JSON key.  Input example: "dx":2.3
+// Returns 0.0f if key not found.
+static float extractFloat(const std::string& s, const char* key) {
+    // Search for "key":
+    std::string search = "\"";
+    search += key;
+    search += "\":";
+    size_t pos = s.find(search);
+    if (pos == std::string::npos) return 0.0f;
+    pos += search.length();
+    // Skip optional whitespace
+    while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t')) pos++;
+    // Parse float: handle optional '-' sign, digits, '.', 'e', 'E', '+'
+    char* end = nullptr;
+    float val = strtof(s.c_str() + pos, &end);
+    (void)end;  // unused
+    return val;
+}
+
+static void handleCommand(const std::string& line, Camera& cam) {
+    if (line.find("\"rotate\"") != std::string::npos) {
+        float dx = extractFloat(line, "dx");
+        float dy = extractFloat(line, "dy");
+        cam.rotate(dx, dy);
+        printf("[cube_renderer] rotate dx=%.2f dy=%.2f\n", dx, dy);
+    } else if (line.find("\"zoom\"") != std::string::npos) {
+        float scale = extractFloat(line, "scale");
+        cam.zoomBy(scale);
+        printf("[cube_renderer] zoom scale=%.2f → zoom=%.2f\n", scale, cam.zoom);
+    } else if (line.find("\"reset\"") != std::string::npos) {
+        cam.reset();
+        printf("[cube_renderer] reset\n");
+    }
+}
+
+static void readCommands(Camera& cam) {
+    char buf[256];
+    while (true) {
+        ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
+        if (n <= 0) break;  // EAGAIN = no more data, or error
+        g_stdinBuf.append(buf, (size_t)n);
+    }
+    // Process complete lines (delimited by '\n')
+    size_t nl;
+    while ((nl = g_stdinBuf.find('\n')) != std::string::npos) {
+        std::string line = g_stdinBuf.substr(0, nl);
+        g_stdinBuf.erase(0, nl + 1);
+        if (!line.empty()) {
+            handleCommand(line, cam);
+        }
+    }
+}
 
 static void signalHandler(int) {
     g_running = false;
