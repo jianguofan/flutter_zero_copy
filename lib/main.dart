@@ -290,6 +290,7 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
   double _top = 80;
   bool _showCube = true;
   bool _debugCpp = false; // 需要调试 C++ 时打开
+  bool _autoRotate = false;
   int _key = 0;
 
   @override
@@ -313,6 +314,7 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
                 left: _left,
                 top: _top,
                 debugCpp: _debugCpp,
+                autoRotate: _autoRotate,
               ),
             Positioned(right: 20, top: 20, child: _controlPanel()),
           ],
@@ -356,6 +358,34 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
                 onChanged: (v) => setState(() => _debugCpp = v),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Auto Rotate', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Spacer(),
+              Switch(
+                value: _autoRotate,
+                activeColor: Colors.lightBlueAccent,
+                onChanged: (v) => setState(() => _autoRotate = v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: () {
+                // Re-create widget to trigger full init with new key
+                setState(() { _key++; });
+              },
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reset View', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white70,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           _slider('W', _width, 200, 1200, (v) => _width = v),
