@@ -1,5 +1,5 @@
 name: flutter_zero_copy
-description: "A new Flutter project."
+description: "Zero-copy GPU texture sharing demo using macOS IOSurface — C++ OpenGL rendering displayed in Flutter without pixel copies."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
