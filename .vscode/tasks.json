@@ -1,0 +1,27 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build cube_renderer",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "${workspaceFolder}/build_cube_renderer.sh"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "options": {
+                "env": {
+                    "PATH": "/Users/jgfan/Applications/CMake.app/Contents/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${env:PATH}"
+                }
+            }
+        }
+    ]
+}

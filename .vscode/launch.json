@@ -1,0 +1,64 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Flutter macOS (Debug)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "macos",
+            "flutterMode": "debug"
+        },
+        {
+            "name": "Flutter macOS (Debug + Build C++)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "macos",
+            "flutterMode": "debug",
+            "preLaunchTask": "Build cube_renderer"
+        },
+        {
+            "name": "Flutter macOS (Profile)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "macos",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "Flutter macOS (Release)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "macos",
+            "flutterMode": "release"
+        },
+
+        {
+            "name": "C++ Attach to cube_renderer (lldb)",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceFolder}/cube_renderer/build/cube_renderer",
+            "pid": "${command:pickProcess}"
+        },
+        {
+            "name": "C++ Attach to cube_renderer (by name)",
+            "type": "lldb",
+            "request": "attach",
+            "program": "${workspaceFolder}/cube_renderer/build/cube_renderer",
+            "processName": "cube_renderer"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Flutter + C++ (full debug)",
+            "configurations": [
+                "Flutter macOS (Debug)"
+            ],
+            "presentation": {
+                "order": 1
+            }
+        }
+    ]
+}

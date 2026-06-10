@@ -17,7 +17,6 @@ macos/Flutter/ephemeral/
 cube_renderer/build/
 
 # IDE
-.vscode/
 .idea/
 
 # Superpowers
