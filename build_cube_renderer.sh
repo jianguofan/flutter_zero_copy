@@ -18,10 +18,11 @@ else
     exit 1
 fi
 
-echo "=== Building cube_renderer ==="
+BUILD_TYPE="${1:-Release}"
+echo "=== Building cube_renderer ($BUILD_TYPE) ==="
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
-"$CMAKE" .. -DCMAKE_BUILD_TYPE=Release
+"$CMAKE" .. -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 make -j"$(sysctl -n hw.ncpu)"
 
 echo ""
