@@ -15,7 +15,14 @@ class ZeroCopyWidget extends StatefulWidget {
   final double left;
   final double top;
   final String? rendererPath;
-  final bool debugCpp;  // pass --debug to cube_renderer, waits for lldb attach
+  final bool debugCpp;
+
+  // Interactive control parameters
+  final bool interactive;
+  final bool autoRotate;
+  final double rotationSpeed;
+  final double minZoom;
+  final double maxZoom;
 
   const ZeroCopyWidget({
     super.key,
@@ -25,6 +32,11 @@ class ZeroCopyWidget extends StatefulWidget {
     required this.top,
     this.rendererPath,
     this.debugCpp = false,
+    this.interactive = true,
+    this.autoRotate = false,
+    this.rotationSpeed = 0.005,
+    this.minZoom = 1.5,
+    this.maxZoom = 20.0,
   });
 
   @override
@@ -110,6 +122,77 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
         .listen((l) => debugPrint('[cube:err] $l'));
 
     _childProcess!.exitCode.then((c) => debugPrint('[ZeroCopy] Renderer exit: $c'));
+
+    // Send initial camera config to C++ renderer
+    _sendCommand({
+      'type': 'config',
+      'autoRotate': widget.autoRotate,
+    });
+  }
+
+  // ── Interactive control ─────────────────────────────────────────────
+
+  /// Write a JSON command to the child process stdin.
+  void _sendCommand(Map<String, dynamic> cmd) {
+    if (_childProcess == null) return;
+    final json = '${jsonEncode(cmd)}\n';
+    _childProcess!.stdin.write(json);
+  }
+
+  // Accumulated delta between sends
+  double _accumulatedDx = 0.0;
+  double _accumulatedDy = 0.0;
+  int _lastSendTime = 0;
+
+  void _onPointerDown(PointerDownEvent e) {
+    if (!widget.interactive) return;
+    _accumulatedDx = 0.0;
+    _accumulatedDy = 0.0;
+    _lastSendTime = DateTime.now().millisecondsSinceEpoch;
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    if (!widget.interactive) return;
+    _accumulatedDx += e.delta.dx;
+    _accumulatedDy += e.delta.dy;
+    // Send at most once per ~16ms, with accumulated delta
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastSendTime < 16) return;
+    _lastSendTime = now;
+    _sendCommand({
+      'type': 'rotate',
+      'dx': _accumulatedDx * widget.rotationSpeed,
+      'dy': _accumulatedDy * widget.rotationSpeed,
+    });
+    _accumulatedDx = 0.0;
+    _accumulatedDy = 0.0;
+  }
+
+  void _onPointerUp(PointerUpEvent e) {
+    // Flush any remaining delta
+    if (_accumulatedDx != 0.0 || _accumulatedDy != 0.0) {
+      _sendCommand({
+        'type': 'rotate',
+        'dx': _accumulatedDx * widget.rotationSpeed,
+        'dy': _accumulatedDy * widget.rotationSpeed,
+      });
+      _accumulatedDx = 0.0;
+      _accumulatedDy = 0.0;
+    }
+  }
+
+  void _onPointerSignal(PointerSignalEvent e) {
+    if (!widget.interactive) return;
+    if (e is PointerScrollEvent) {
+      _sendCommand({
+        'type': 'zoom',
+        'scale': e.scrollDelta.dy,
+      });
+    }
+  }
+
+  void _resetView() {
+    _sendCommand({'type': 'reset'});
   }
 
   @override
@@ -141,6 +224,21 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
         child: Stack(
           children: [
             child,
+            // Transparent touch layer for 3D interaction
+            if (widget.interactive && _textureId != null && _error == null)
+              Positioned.fill(
+                child: GestureDetector(
+                  onDoubleTap: _resetView,
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: _onPointerDown,
+                    onPointerMove: _onPointerMove,
+                    onPointerUp: _onPointerUp,
+                    onPointerSignal: _onPointerSignal,
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+              ),
             if (_surfaceID != null)
               Positioned(
                 left: 10, top: 10,
