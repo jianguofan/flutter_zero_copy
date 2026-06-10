@@ -305,6 +305,11 @@ static void handleCommand(const std::string& line, Camera& cam) {
     } else if (line.find("\"reset\"") != std::string::npos) {
         cam.reset();
         printf("[cube_renderer] reset\n");
+    } else if (line.find("\"config\"") != std::string::npos) {
+        if (line.find("\"autoRotate\"") != std::string::npos) {
+            cam.autoRotate = (line.find("true") != std::string::npos);
+            printf("[cube_renderer] config autoRotate=%d\n", cam.autoRotate);
+        }
     }
 }
 
