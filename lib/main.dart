@@ -326,25 +326,91 @@ class _ZeroCopyDemoAppState extends State<ZeroCopyDemoApp> {
       title: 'Zero-Copy GPU Texture Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: const Color(0xFF1A1A2E)),
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Zero-Copy GPU Texture Demo'),
-          backgroundColor: const Color(0xFF0F3460),
-        ),
-        body: Stack(
-          children: [
-            if (_showCube)
-              ZeroCopyWidget(
-                key: ValueKey(_key),
-                width: _width,
-                height: _height,
-                left: _left,
-                top: _top,
-                debugCpp: _debugCpp,
-                autoRotate: _autoRotate,
+      home: DefaultTabController(
+        length: 4,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Zero-Copy GPU Texture Demo'),
+            backgroundColor: const Color(0xFF0F3460),
+            bottom: const TabBar(
+              indicatorColor: Colors.blueAccent,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white54,
+              tabs: [
+                Tab(icon: Icon(Icons.view_in_ar), text: 'Cube'),
+                Tab(icon: Icon(Icons.article), text: 'Info'),
+                Tab(icon: Icon(Icons.palette), text: 'Colors'),
+                Tab(icon: Icon(Icons.settings), text: 'Config'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              // ── Tab 1: Cube Renderer + Control Panel ──────────
+              Stack(
+                children: [
+                  if (_showCube)
+                    ZeroCopyWidget(
+                      key: ValueKey(_key),
+                      width: _width,
+                      height: _height,
+                      left: _left,
+                      top: _top,
+                      debugCpp: _debugCpp,
+                      autoRotate: _autoRotate,
+                    ),
+                  Positioned(right: 20, top: 20, child: _controlPanel()),
+                ],
               ),
-            Positioned(right: 20, top: 20, child: _controlPanel()),
-          ],
+
+              // ── Tab 2: Info placeholder ───────────────────────
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_outline, size: 64, color: Colors.white24),
+                    const SizedBox(height: 16),
+                    Text('Information',
+                        style: TextStyle(fontSize: 24, color: Colors.white54)),
+                    const SizedBox(height: 8),
+                    Text('Surface ID: ${_showCube ? "active" : "none"}',
+                        style: TextStyle(fontSize: 14, color: Colors.white38)),
+                  ],
+                ),
+              ),
+
+              // ── Tab 3: Color palette placeholder ──────────────
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF0F3460), Color(0xFF16213E), Color(0xFF1A1A2E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Center(
+                  child: Text('🎨 Color Space',
+                      style: TextStyle(fontSize: 20, color: Colors.white54)),
+                ),
+              ),
+
+              // ── Tab 4: Config placeholder ─────────────────────
+              const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.tune, size: 64, color: Colors.white24),
+                    SizedBox(height: 16),
+                    Text('Configuration',
+                        style: TextStyle(fontSize: 24, color: Colors.white54)),
+                    SizedBox(height: 8),
+                    Text('More settings coming soon',
+                        style: TextStyle(fontSize: 14, color: Colors.white38)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
