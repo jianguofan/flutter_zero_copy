@@ -19,6 +19,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <cerrno>
 #include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
@@ -233,7 +234,7 @@ struct Camera {
     float  zoom        = 6.0f;
     float  minZoom     = 1.5f;
     float  maxZoom     = 20.0f;
-    float  sensitivity = 0.005f;
+    float  sensitivity = 0.01f;
     bool   autoRotate  = false;
     float  autoRotateAngle = 0.0f;    // accumulated auto-rotation angle
     float  idleTimer       = 2.0f;    // seconds since last user input
@@ -293,19 +294,21 @@ static float extractFloat(const std::string& s, const char* key) {
 }
 
 static void handleCommand(const std::string& line, Camera& cam) {
-    if (line.find("\"rotate\"") != std::string::npos) {
+    // Use "type":"X" matching to avoid substring collisions
+    // (e.g. "rotate" must not match inside "autoRotate")
+    if (line.find("\"type\":\"rotate\"") != std::string::npos || line.find("\"type\": \"rotate\"") != std::string::npos) {
         float dx = extractFloat(line, "dx");
         float dy = extractFloat(line, "dy");
         cam.rotate(dx, dy);
         printf("[cube_renderer] rotate dx=%.2f dy=%.2f\n", dx, dy);
-    } else if (line.find("\"zoom\"") != std::string::npos) {
+    } else if (line.find("\"type\":\"zoom\"") != std::string::npos || line.find("\"type\": \"zoom\"") != std::string::npos) {
         float scale = extractFloat(line, "scale");
         cam.zoomBy(scale);
         printf("[cube_renderer] zoom scale=%.2f → zoom=%.2f\n", scale, cam.zoom);
-    } else if (line.find("\"reset\"") != std::string::npos) {
+    } else if (line.find("\"type\":\"reset\"") != std::string::npos || line.find("\"type\": \"reset\"") != std::string::npos) {
         cam.reset();
         printf("[cube_renderer] reset\n");
-    } else if (line.find("\"config\"") != std::string::npos) {
+    } else if (line.find("\"type\":\"config\"") != std::string::npos || line.find("\"type\": \"config\"") != std::string::npos) {
         if (line.find("\"autoRotate\"") != std::string::npos) {
             cam.autoRotate = (line.find("true") != std::string::npos);
             printf("[cube_renderer] config autoRotate=%d\n", cam.autoRotate);
@@ -315,10 +318,20 @@ static void handleCommand(const std::string& line, Camera& cam) {
 
 static void readCommands(Camera& cam) {
     char buf[256];
+    int totalBytes = 0;
     while (true) {
         ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
-        if (n <= 0) break;  // EAGAIN = no more data, or error
+        if (n < 0) {
+            if (errno == EAGAIN) break;  // no more data (non-blocking)
+            perror("[cube_renderer] read stdin error");
+            break;
+        }
+        if (n == 0) break;  // EOF
+        totalBytes += n;
         g_stdinBuf.append(buf, (size_t)n);
+    }
+    if (totalBytes > 0) {
+        printf("[cube_renderer] stdin: read %d bytes, buf len=%zu\n", totalBytes, g_stdinBuf.size());
     }
     // Process complete lines (delimited by '\n')
     size_t nl;
@@ -326,6 +339,7 @@ static void readCommands(Camera& cam) {
         std::string line = g_stdinBuf.substr(0, nl);
         g_stdinBuf.erase(0, nl + 1);
         if (!line.empty()) {
+            printf("[cube_renderer] stdin: processing line: %s\n", line.c_str());
             handleCommand(line, cam);
         }
     }
@@ -490,6 +504,10 @@ static bool amIBeingDebugged() {
 // ---------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) {
+    // Disable stdout buffering — stdout is a pipe to Flutter, so printf
+    // output would otherwise be stuck in a 4KB buffer and never visible.
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     // Parse args: <surfaceID> [width] [height] [--debug]
     bool debugMode = false;
     const char* surfaceArg = nullptr;
@@ -707,6 +725,9 @@ int main(int argc, char* argv[]) {
 
     // ── 5. Render loop ─────────────────────────────────────────────
     printf("[cube_renderer] Entering cube render loop...\n");
+    printf("[cube_renderer] INITIAL STATE: autoRotate=%d, zoom=%.2f, orientation=identity\n",
+           g_camera.autoRotate, g_camera.zoom);
+    printf("[cube_renderer] Listening on stdin for JSON commands...\n");
 
     int frameCount = 0;
 

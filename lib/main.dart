@@ -35,7 +35,7 @@ class ZeroCopyWidget extends StatefulWidget {
     this.debugCpp = false,
     this.interactive = true,
     this.autoRotate = false,
-    this.rotationSpeed = 0.005,
+    this.rotationSpeed = 1.0,
     this.minZoom = 1.5,
     this.maxZoom = 20.0,
   });
@@ -146,9 +146,23 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
 
   /// Write a JSON command to the child process stdin.
   void _sendCommand(Map<String, dynamic> cmd) {
-    if (_childProcess == null) return;
-    final json = '${jsonEncode(cmd)}\n';
-    _childProcess!.stdin.write(json);
+    if (_disposed) {
+      debugPrint('[ZeroCopy] _sendCommand SKIP: disposed');
+      return;
+    }
+    final stdin = _childProcess?.stdin;
+    if (stdin == null) {
+      debugPrint('[ZeroCopy] _sendCommand SKIP: stdin is null');
+      return;
+    }
+    try {
+      final jsonStr = '${jsonEncode(cmd)}\n';
+      debugPrint('[ZeroCopy] → C++: $jsonStr');
+      stdin.write(jsonStr);
+      stdin.flush();  // CRITICAL: IOSink buffers, must flush or C++ never sees data
+    } catch (e) {
+      debugPrint('[ZeroCopy] _sendCommand failed: $e');
+    }
   }
 
   // Accumulated delta between sends
@@ -157,6 +171,7 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
   int _lastSendTime = 0;
 
   void _onPointerDown(PointerDownEvent e) {
+    debugPrint('[ZeroCopy] 👆 pointer down at (${e.position.dx}, ${e.position.dy})');
     if (!widget.interactive) return;
     _accumulatedDx = 0.0;
     _accumulatedDy = 0.0;
@@ -167,10 +182,10 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
     if (!widget.interactive) return;
     _accumulatedDx += e.delta.dx;
     _accumulatedDy += e.delta.dy;
-    // Send at most once per ~16ms, with accumulated delta
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastSendTime < 16) return;
     _lastSendTime = now;
+    debugPrint('[ZeroCopy] 🖱️ move: raw(${e.delta.dx}, ${e.delta.dy}) acc(${_accumulatedDx.toStringAsFixed(1)}, ${_accumulatedDy.toStringAsFixed(1)})');
     _sendCommand({
       'type': 'rotate',
       'dx': _accumulatedDx * widget.rotationSpeed,

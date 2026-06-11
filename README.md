@@ -9,25 +9,26 @@
 - **Flutter 端**: MethodChannel → IOSurface 创建 → CVPixelBuffer → Texture Widget
 - **C++ 端**: Headless OpenGL → IOSurface 绑定 → FBO 渲染 → glFlush
 - **同步机制**: CVDisplayLink 硬件 VSync 回调驱动帧更新 (60fps)
+- **交互控制**: Dart GestureDetector → stdin JSON 命令 → C++ arcball 相机 (旋转/缩放/重置)
 
 ## 架构
 
 ```
-Flutter App (Dart)                  C++ Renderer
-     │                                    │
-     ├─ IOSurface.create() ───────────────┤─ IOSurface.lookup()
-     ├─ Texture(textureId)                 │─ FBO → surface
-     │                                    │─ drawRotatingCube()
-     │         ┌──────────────┐           │
-     │         │  IOSurface   │◄──────────┤
-     │         │  GPU VRAM    │  glFlush  │
-     │         │  (零拷贝)     │           │
-     │         └──────┬───────┘           │
-     │                │                    │
-     │         Metal 采样                 │
-     │         Impeller 合成              │
-     ▼                                    ▼
-          屏幕帧缓冲 (60fps)
+ Flutter App (Dart)                     C++ Renderer
+      │                                       │
+      ├─ IOSurface.create() ──────────────────┤─ IOSurface.lookup()
+      ├─ Texture(textureId)                    │─ FBO → surface
+      │                                       │─ arcball camera
+      │          ┌──────────────┐             │
+      │ Gesture  │  IOSurface   │◄────────────┤
+      │ ───────► │  GPU VRAM    │  glFlush    │
+      │  stdin   │  (零拷贝)     │             │
+      │  JSON    └──────┬───────┘             │
+      │                 │                      │
+      │          Metal 采样                   │
+      │          Impeller 合成                │
+      ▼                 ▼                      ▼
+           屏幕帧缓冲 (60fps)
 ```
 
 ## 快速开始
@@ -87,12 +88,35 @@ flutter_zero_copy/
 | [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) | 系统架构、文件详解、API 映射、调试指南、Bug 记录 |
 | [`docs/ZERO_COPY_PRINCIPLES.md`](docs/ZERO_COPY_PRINCIPLES.md) | 零拷贝原理、内存模型、时序图、常见误区、跨平台对应概念 |
 
+## 交互控制协议
+
+Flutter 手势 → C++ stdin JSON 命令：
+
+| 手势 | JSON 命令 |
+|------|----------|
+| 拖拽 | `{"type":"rotate","dx":12.0,"dy":5.0}` |
+| 滚轮/捏合 | `{"type":"zoom","scale":1.5}` |
+| 双击 | `{"type":"reset"}` |
+| 配置 | `{"type":"config","autoRotate":false}` |
+
 ## 性能
 
 | 方案 | 每帧延迟 | 60fps 可行性 |
 |------|---------|-------------|
 | 传统 (glReadPixels + CPU 拷贝) | 8–15ms | ❌ 15–25fps |
 | **零拷贝 (IOSurface)** | **<0.1ms** | ✅ 稳定 60fps |
+
+## 调试
+
+C++ 端 stdout 默认全缓冲（pipe 模式），已通过 `setvbuf(stdout, NULL, _IONBF, 0)` 禁用。
+控制台日志格式：
+
+```
+[cube] [cube_renderer] INITIAL STATE: autoRotate=0, zoom=6.00
+[cube] [cube_renderer] stdin: read 45 bytes, buf len=45
+[cube] [cube_renderer] stdin: processing line: {"type":"rotate","dx":22.3,"dy":2.7}
+[cube] [cube_renderer] rotate dx=22.33 dy=2.15
+```
 
 ## 许可
 
