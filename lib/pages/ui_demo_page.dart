@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_zero_copy/pages/main_frame_page.dart';
-import 'package:flutter_zero_copy/pages/projects/projects_page.dart';
+import 'package:flutter_zero_copy/pages/home/home_page.dart';
 import 'package:flutter_zero_copy/pages/device/widgets/device_selector.dart';
 import 'package:flutter_zero_copy/pages/device/device_control_full_page.dart';
 import 'package:flutter_zero_copy/pages/device/widgets/device_filament_view.dart';
@@ -34,18 +34,18 @@ class _UiMigrationDemoPageState extends State<UiMigrationDemoPage> {
   @override
   Widget build(BuildContext context) {
     return MainFramePage(
-      initialTabIndex: 3, // 默认显示项目页面
+      initialTabIndex: 0, // 默认显示首页
       pages: [
+        const HomePage(), // 首页（包含侧边栏和项目网格）
         _buildPreparePage(),
         _buildPreviewPage(),
         _buildDevicePage(),
-        const ProjectsPage(),
       ],
       pageActions: [
-        [], // 准备页面无操作按钮
-        [], // 预览页面无操作按钮
-        [], // 设备页面无操作按钮
-        _buildProjectPageActions(), // 项目页面操作按钮
+        [], // 首页（操作按钮已集成在 HomePage 内部）
+        [], // 准备页面
+        [], // 预览页面
+        [], // 设备页面
       ],
     );
   }

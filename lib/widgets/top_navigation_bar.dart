@@ -54,6 +54,25 @@ class TopNavigationBar extends StatelessWidget {
     final theme = Theme.of(context);
     final isSelected = currentIndex == index;
 
+    // 第一个Tab显示home图标
+    final Widget content = index == 0
+        ? Icon(
+            Icons.home,
+            size: 20,
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface,
+          )
+        : Text(
+            label,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          );
+
     return InkWell(
       onTap: () => onTabChanged(index),
       child: Container(
@@ -68,15 +87,7 @@ class TopNavigationBar extends StatelessWidget {
             ),
           ),
         ),
-        child: Text(
-          label,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: isSelected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurface,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
+        child: content,
       ),
     );
   }
