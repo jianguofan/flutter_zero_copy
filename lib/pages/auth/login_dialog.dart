@@ -329,10 +329,6 @@ class _LoginDialogState extends State<LoginDialog>
         ],
       ),
     );
-  }
-}
-
-
   /// 执行登录
   void _performLogin(BuildContext context) {
     final userState = context.read<UserState>();
@@ -355,4 +351,5 @@ class _LoginDialogState extends State<LoginDialog>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('登录成功')),
     );
+  }
   }
