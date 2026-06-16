@@ -10,9 +10,8 @@ class AddDeviceDialog extends StatefulWidget {
   State<AddDeviceDialog> createState() => _AddDeviceDialogState();
 }
 
-class _AddDeviceDialogState extends State<AddDeviceDialog>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _AddDeviceDialogState extends State<AddDeviceDialog> {
+  int _selectedTabIndex = 1; // 默认选中IP码搜索绑定
   bool _isScanning = false;
 
   // 模拟设备列表
@@ -52,15 +51,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
     // 自动开始扫描
     _startScanning();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   void _startScanning() {
@@ -90,63 +82,121 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
         height: 680,
         child: Column(
           children: [
-            // 标题栏
+            // 深色标题栏
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: const BorderRadius.vertical(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Color(0xFF37474F), // 深灰色背景
+                borderRadius: BorderRadius.vertical(
                   top: Radius.circular(12),
                 ),
               ),
               child: Row(
                 children: [
                   const Spacer(),
-                  Text(
+                  const Text(
                     '添加设备',
-                    style: theme.textTheme.titleLarge?.copyWith(
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
             ),
 
-            // Tab栏
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: theme.dividerColor,
-                    width: 1,
-                  ),
+            // 白色内容区
+            Expanded(
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 自定义Tab按钮
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTabButton(
+                            index: 0,
+                            icon: Icons.cloud_outlined,
+                            label: 'PIN码绑定',
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildTabButton(
+                            index: 1,
+                            icon: Icons.router,
+                            label: 'IP码搜索绑定',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 内容区
+                    Expanded(
+                      child: _selectedTabIndex == 0
+                          ? _buildPinCodeTab()
+                          : _buildIpSearchTab(theme),
+                    ),
+                  ],
                 ),
               ),
-              child: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(text: 'PIN码绑定'),
-                  Tab(text: 'IP码搜索绑定'),
-                ],
-              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Tab内容
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // PIN码绑定页面
-                  _buildPinCodeTab(theme),
+  /// 自定义Tab按钮
+  Widget _buildTabButton({
+    required int index,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _selectedTabIndex == index;
 
-                  // IP码搜索绑定页面
-                  _buildIpSearchTab(theme),
-                ],
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedTabIndex = index;
+        });
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1976D2) : Colors.white,
+          border: Border.all(
+            color: isSelected ? const Color(0xFF1976D2) : const Color(0xFFBDBDBD),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? Colors.white : const Color(0xFF1976D2),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF1976D2),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -156,65 +206,64 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
   }
 
   /// PIN码绑定Tab
-  Widget _buildPinCodeTab(ThemeData theme) {
+  Widget _buildPinCodeTab() {
     return const Center(
-      child: Text('PIN码绑定功能待实现'),
+      child: Text(
+        'PIN码绑定功能待实现',
+        style: TextStyle(
+          color: Color(0xFF757575),
+          fontSize: 14,
+        ),
+      ),
     );
   }
 
   /// IP码搜索绑定Tab
   Widget _buildIpSearchTab(ThemeData theme) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 刷新按钮
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Icon(
-                _isScanning ? Icons.refresh : Icons.refresh,
-                size: 20,
-                color: theme.colorScheme.primary,
+        // 附近机器标题
+        Row(
+          children: [
+            const Icon(
+              Icons.refresh,
+              size: 20,
+              color: Color(0xFF1976D2),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              '附近机器',
+              style: TextStyle(
+                color: Color(0xFF1976D2),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(width: 8),
-              Text(
-                '附近机器',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w500,
+            ),
+            const SizedBox(width: 8),
+            if (_isScanning)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF1976D2),
                 ),
               ),
-              const SizedBox(width: 8),
-              if (_isScanning)
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _startScanning,
-                tooltip: '刷新',
-              ),
-            ],
-          ),
+          ],
         ),
+        const SizedBox(height: 16),
 
         // 设备列表
         Expanded(
           child: _isScanning && _devices.isEmpty
               ? const Center(child: CircularProgressIndicator())
               : ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _devices.length,
                   separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final device = _devices[index];
-                    return _buildDeviceItem(device, theme);
+                    return _buildDeviceItem(device);
                   },
                 ),
         ),
@@ -223,9 +272,9 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
   }
 
   /// 设备列表项
-  Widget _buildDeviceItem(DiscoveredDevice device, ThemeData theme) {
+  Widget _buildDeviceItem(DiscoveredDevice device) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       child: Row(
         children: [
           // 设备图标
@@ -233,12 +282,13 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
+              color: const Color(0xFFF5F5F5),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              device.icon,
-              color: theme.colorScheme.onSurfaceVariant,
+            child: const Icon(
+              Icons.print,
+              color: Color(0xFF757575),
+              size: 28,
             ),
           ),
           const SizedBox(width: 16),
@@ -252,15 +302,18 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
                   children: [
                     Text(
                       device.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: const TextStyle(
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
+                        color: Color(0xFF212121),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '(${device.mode})',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF757575),
                       ),
                     ),
                   ],
@@ -268,8 +321,9 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
                 const SizedBox(height: 4),
                 Text(
                   device.ip,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF757575),
                   ),
                 ),
               ],
@@ -277,15 +331,27 @@ class _AddDeviceDialogState extends State<AddDeviceDialog>
           ),
 
           // 连接按钮
-          FilledButton(
+          ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
               debugPrint('连接设备: ${device.name} (${device.ip})');
             },
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1976D2),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              elevation: 0,
             ),
-            child: const Text('连接'),
+            child: const Text(
+              '连接',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
