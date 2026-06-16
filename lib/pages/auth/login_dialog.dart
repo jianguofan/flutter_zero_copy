@@ -353,3 +353,4 @@ class _LoginDialogState extends State<LoginDialog>
       const SnackBar(content: Text('登录成功')),
     );
   }
+}
