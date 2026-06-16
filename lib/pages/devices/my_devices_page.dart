@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_zero_copy/pages/devices/widgets/add_device_dialog.dart';
 
 /// 我的设备页面
 ///
