@@ -18,8 +18,10 @@ graph TB
         Profile["Profile<br/>个人中心"]
     end
     
-    subgraph State["State Layer (状态层)"]
-        UserState["UserState<br/>(ChangeNotifier)<br/>━━━━━━━━━━━━━━━<br/>- _isLoggedIn: bool<br/>- _username: String?<br/>- _userId: String?<br/>- _token: TokenEntity?<br/>- _tokenService: TokenService<br/>━━━━━━━━━━━━━━━<br/>+ login()<br/>+ logout()<br/>+ getAccessToken()<br/>+ hasValidToken()"]
+    subgraph State["State Layer (状态层 - Riverpod)"]
+        UserState["UserState<br/>(Immutable State)<br/>━━━━━━━━━━━━━━━<br/>- isLoggedIn: bool<br/>- username: String?<br/>- userId: String?<br/>- token: TokenEntity?<br/>━━━━━━━━━━━━━━━<br/>+ copyWith()"]
+        
+        UserStateNotifier["UserStateNotifier<br/>(StateNotifier)<br/>━━━━━━━━━━━━━━━<br/>- _tokenService: TokenService<br/>━━━━━━━━━━━━━━━<br/>+ login()<br/>+ logout()<br/>+ getAccessToken()<br/>+ hasValidToken()"]
     end
     
     subgraph Domain["Domain Layer (领域层)"]
@@ -40,14 +42,14 @@ graph TB
         SharedPrefs["SharedPreferences<br/>持久化存储"]
     end
     
-    LoginDialog -->|context.read| UserState
-    HomePage -->|context.watch| UserState
-    Profile -->|context.read| UserState
+    LoginDialog -->|ref.read| UserStateNotifier
+    HomePage -->|ref.watch| UserState
+    Profile -->|ref.read| UserStateNotifier
     
-    UserState -->|使用| TokenService
+    UserStateNotifier -->|管理| UserState
     
-    TokenService -->|包含| TokenEntity
-    TokenService -->|依赖| TokenRepo
+    UserState -->|包含| TokenEntity
+    UserStateNotifier -->|使用| TokenService
     
     TokenServiceImpl -.实现.-> TokenService
     TokenRepoImpl -.实现.-> TokenRepo
@@ -85,7 +87,7 @@ sequenceDiagram
     
     Dialog->>Dialog: 6. TokenEntity.fromApiResponse()
     
-    Dialog->>State: 7. login(username, token)
+    Dialog->>State: 7. ref.read(userStateProvider.notifier)<br/>.login(username, token)
     
     State->>Service: 8. saveToken(token)
     Service->>Repo: 9. saveToken(token)
@@ -94,10 +96,10 @@ sequenceDiagram
     Repo-->>Service: 12. 完成
     Service-->>State: 13. 完成
     
-    State->>State: 14. 更新内存状态<br/>_isLoggedIn = true<br/>_username = xxx<br/>_token = TokenEntity
+    State->>State: 14. 更新状态<br/>state = UserState(<br/>  isLoggedIn: true,<br/>  username: xxx,<br/>  token: TokenEntity<br/>)
     
-    State->>State: 15. notifyListeners()
-    State-->>Dialog: 16. Provider通知
+    State->>State: 15. 自动通知监听者<br/>(StateNotifier 机制)
+    State-->>Dialog: 16. Riverpod 通知
     
     Dialog->>User: 17. UI更新<br/>显示用户名
     Dialog->>User: 18. 关闭对话框
@@ -160,7 +162,7 @@ sequenceDiagram
     Page->>Page: 2. 显示确认对话框
     User->>Page: 3. 确认退出
     
-    Page->>State: 4. logout()
+    Page->>State: 4. ref.read(userStateProvider.notifier)<br/>.logout()
     
     State->>Service: 5. clearToken()
     Service->>Repo: 6. clearToken()
@@ -169,10 +171,10 @@ sequenceDiagram
     Repo-->>Service: 9. 完成
     Service-->>State: 10. 完成
     
-    State->>State: 11. 清除内存状态<br/>_isLoggedIn = false<br/>_username = null<br/>_userId = null<br/>_token = null
+    State->>State: 11. 清除状态<br/>state = const UserState(<br/>  isLoggedIn: false<br/>)
     
-    State->>State: 12. notifyListeners()
-    State-->>Page: 13. Provider通知
+    State->>State: 12. 自动通知监听者
+    State-->>Page: 13. Riverpod 通知
     
     Page->>User: 14. UI更新为未登录
     Page->>User: 15. 显示提示"已退出登录"
@@ -321,30 +323,30 @@ flowchart LR
 
 ```mermaid
 graph TD
-    Main[main.dart] --> Provider[ChangeNotifierProvider]
+    Main[main.dart] --> ProviderScope[ProviderScope]
     
-    Provider --> Create[create: UserState]
-    Provider --> App[MaterialApp]
+    ProviderScope --> Create[userStateProvider<br/>StateNotifierProvider]
+    ProviderScope --> App[MaterialApp]
     
     App --> Pages[应用页面]
     
-    Pages --> Watch[context.watch<br/>UserState]
-    Pages --> Read[context.read<br/>UserState]
+    Pages --> Watch[ref.watch<br/>userStateProvider]
+    Pages --> Read[ref.read<br/>userStateProvider.notifier]
     
     Watch --> Listen[监听状态变化<br/>自动重建UI]
     Read --> Call[调用方法<br/>不监听变化]
     
     Call --> Method[login/logout<br/>等方法]
     
-    Method --> Notify[notifyListeners]
+    Method --> UpdateState[state = newState]
     
-    Notify --> Watch
+    UpdateState --> Watch
     
     style Main fill:#e3f2fd
-    style Provider fill:#fff3e0
+    style ProviderScope fill:#fff3e0
     style Watch fill:#c8e6c9
     style Read fill:#ffccbc
-    style Notify fill:#f48fb1
+    style UpdateState fill:#f48fb1
     style Listen fill:#ce93d8
 ```
 
