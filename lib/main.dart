@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
 import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
 
 const _channel = MethodChannel('com.snapmaker.zero_copy/texture');
