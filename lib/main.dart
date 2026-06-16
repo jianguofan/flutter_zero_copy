@@ -304,7 +304,7 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
 // Demo App
 // =========================================================================
 
-void main() => runApp(const MyApp());
+void main() => runApp(const ProviderScope(child: MyApp()));
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
