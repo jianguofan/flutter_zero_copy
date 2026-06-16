@@ -163,23 +163,7 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
   void _showAddDeviceDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('添加设备'),
-        content: const Text('这里将实现添加设备的功能。\n\n可以通过以下方式添加：\n• 扫描局域网设备\n• 手动输入IP地址\n• USB连接'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              debugPrint('开始扫描设备');
-            },
-            child: const Text('扫描设备'),
-          ),
-        ],
-      ),
+      builder: (context) => const AddDeviceDialog(),
     );
   }
 }
