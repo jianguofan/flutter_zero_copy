@@ -75,7 +75,7 @@ class _HomePageState extends State<HomePage> {
                       const ProjectsPage(),
 
                       // 我的设备页面
-                      _buildPlaceholderPage(context, '我的设备'),
+                      const MyDevicesPage(),
 
                       // 近期文件页面
                       _buildPlaceholderPage(context, '近期文件'),
