@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_zero_copy/state/user_state.dart';
-import 'package:provider/provider.dart';
 
 /// 登录对话框
 ///
 /// 模态弹窗显示登录表单
-class LoginDialog extends StatefulWidget {
+class LoginDialog extends ConsumerStatefulWidget {
   const LoginDialog({super.key});
 
   @override
-  State<LoginDialog> createState() => _LoginDialogState();
+  ConsumerState<LoginDialog> createState() => _LoginDialogState();
 }
 
-class _LoginDialogState extends State<LoginDialog>
+class _LoginDialogState extends ConsumerState<LoginDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _phoneController = TextEditingController();
