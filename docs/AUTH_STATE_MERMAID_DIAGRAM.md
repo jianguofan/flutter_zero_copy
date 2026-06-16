@@ -135,7 +135,7 @@ sequenceDiagram
         Service-->>State: 10. true (有效)
         
         State->>State: 11. _isLoggedIn = true<br/>_token = TokenEntity
-        State->>State: 12. notifyListeners()
+        State->>State: 12. 自动通知监听者<br/>StateNotifier 机制
         State-->>UI: 13. Provider通知
         UI->>UI: 14. UI更新为登录状态
     else Token无效或过期
@@ -368,9 +368,9 @@ flowchart TD
     end
     
     subgraph Logout["退出登录流程"]
-        Start2([logout]) --> Clear1[清除内存状态<br/>_isLoggedIn = false<br/>_username = null<br/>_token = null]
-        Clear1 --> Clear2[清除持久化<br/>SharedPreferences<br/>.remove]
-        Clear2 --> Notify[通知UI更新<br/>notifyListeners]
+        Start2([logout]) --> Clear1[清除Token<br/>SharedPreferences<br/>.remove]
+        Clear1 --> Clear2[更新状态<br/>state = const UserState()]
+        Clear2 --> Notify[自动通知UI<br/>StateNotifier 机制]
         Notify --> Success2[✅ 完成]
     end
     
@@ -378,7 +378,7 @@ flowchart TD
         Start3([应用启动]) --> Load[读取持久化Token<br/>SharedPreferences]
         Load --> Parse[解析JSON<br/>TokenEntity.fromMap]
         Parse --> Validate{Token<br/>有效?}
-        Validate -->|是| Auto[✅ 自动登录<br/>_isLoggedIn = true]
+        Validate -->|是| Auto[✅ 自动登录<br/>state = state.copyWith(...)]
         Validate -->|否| Manual[⚪ 显示未登录]
     end
     
@@ -407,17 +407,21 @@ classDiagram
     }
     
     class UserState {
-        -bool _isLoggedIn
-        -String? _username
-        -String? _userId
-        -TokenEntity? _token
+        +bool isLoggedIn
+        +String? username
+        +String? userId
+        +TokenEntity? token
+        +copyWith()
+    }
+    
+    class UserStateNotifier {
         -TokenService _tokenService
+        -UserState state
         +login(username, token)
         +logout()
         +getAccessToken()
         +hasValidToken()
         +refreshToken(response)
-        +notifyListeners()
     }
     
     class TokenService {
@@ -486,8 +490,9 @@ classDiagram
         +remove(key)
     }
     
-    LoginDialog --> UserState : uses
-    UserState --> TokenService : uses
+    LoginDialog --> UserStateNotifier : uses
+    UserStateNotifier --> UserState : manages
+    UserStateNotifier --> TokenService : uses
     TokenService --> TokenEntity : uses
     TokenService --> TokenRepository : depends on
     TokenServiceImpl ..|> TokenService : implements
