@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_zero_copy/pages/auth/login_dialog.dart';
 
 /// 首页侧边栏组件
 ///
@@ -67,37 +68,46 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
   Widget _buildUserSection(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        children: [
-          // 用户头像
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-            child: Icon(
-              Icons.person,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // 用户名
-          Expanded(
-            child: Text(
-              'JG_CN1',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
+    return InkWell(
+      onTap: () {
+        // 显示登录对话框
+        showDialog(
+          context: context,
+          builder: (context) => const LoginDialog(),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          children: [
+            // 用户头像
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              child: Icon(
+                Icons.person,
+                color: theme.colorScheme.primary,
               ),
             ),
-          ),
+            const SizedBox(width: 12),
 
-          // 下拉箭头
-          Icon(
-            Icons.arrow_drop_down,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ],
+            // 用户名
+            Expanded(
+              child: Text(
+                'JG_CN1',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+
+            // 下拉箭头
+            Icon(
+              Icons.arrow_drop_down,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
