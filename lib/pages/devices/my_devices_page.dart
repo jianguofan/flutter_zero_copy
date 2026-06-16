@@ -69,26 +69,26 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
   Widget _buildDeviceGrid(BuildContext context) {
     // 模拟设备数据
     final devices = <DeviceInfo>[
-      // DeviceInfo(
-      //   id: '1',
-      //   name: 'u11',
-      //   type: 'LAN',
-      //   ipAddress: null,
-      //   isOnline: true,
-      // ),
-      // DeviceInfo(
-      //   id: '2',
-      //   name: 'U1',
-      //   type: 'LAN',
-      //   ipAddress: 'IP:172.18.0.154',
-      //   isOnline: true,
-      // ),
+      DeviceInfo(
+        id: '1',
+        name: 'u11',
+        type: 'LAN',
+        ipAddress: null,
+        isOnline: true,
+      ),
+      DeviceInfo(
+        id: '2',
+        name: 'U1',
+        type: 'LAN',
+        ipAddress: 'IP:172.18.0.154',
+        isOnline: true,
+      ),
     ];
 
     // 如果没有设备，显示空状态
-    if (devices.isEmpty) {
-      return _buildEmptyState(context);
-    }
+    // if (devices.isEmpty) {
+    //   return _buildEmptyState(context);
+    // }
 
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
