@@ -1,0 +1,128 @@
+schema: spec-driven
+type: implementation-spec
+status: approved
+
+metadata:
+  title: "Lava App 架构实施规范"
+  description: "基于架构审查修正方案，使用已验证的 lava-device-controll SDK 实施完整 Flutter 应用"
+  author: "Jianguo Fan"
+  created: "2026-06-15"
+  related:
+    - "../../superpowers/specs/2026-06-15-lava-architecture-review.md"
+    - "../../superpowers/specs/2026-06-15-lava-architecture-review-qa.md"
+  references:
+    sdk: "/Users/jgfan/snapmaker/lava-device-controll"
+    architecture: "ARCHITECTURE.md (2,607 lines, 4-perspective review)"
+
+artifacts:
+  - name: spec.md
+    type: specification
+    description: "完整的实施规范：架构映射、接口定义、实施路线图"
+    lines: 800+
+
+  - name: tasks.md
+    type: task-breakdown
+    description: "详细任务分解（每个任务 ≤ 2 小时），覆盖 Phase 0-4"
+    lines: 600+
+
+  - name: proposal.md
+    type: proposal
+    description: "实施方案提案：关键决策、风险评估、验收标准"
+    lines: 300+
+
+timeline:
+  total: "10 weeks"
+  phases:
+    - name: "Phase 0: 环境准备"
+      duration: "1 week"
+      deliverables: ["项目结构", "SDK 集成", "CI/CD"]
+
+    - name: "Phase 1: 核心基础设施"
+      duration: "4 weeks"
+      deliverables: ["Shared Kernel", "Device Domain/Data/Provider 层"]
+
+    - name: "Phase 2: UI 层"
+      duration: "2 weeks"
+      deliverables: ["设备列表/详情/发现页"]
+
+    - name: "Phase 3: 集成与优化"
+      duration: "2 weeks"
+      deliverables: ["后台处理", "错误处理", "性能优化", "E2E 测试"]
+
+    - name: "Phase 4: 发布准备"
+      duration: "1 week"
+      deliverables: ["macOS 打包", "桌面端内部测试"]
+
+key_decisions:
+  - decision: "SDK 集成方式"
+    choice: "适配器模式（LavaSdkConnection implements IConnection）"
+    rationale: "SDK 已验证可用，复用而非重写"
+
+  - decision: "状态管理"
+    choice: "引入 IDeviceSession Mediator"
+    rationale: "解决 Registry + Connection 双重 activeDevice 冲突"
+
+  - decision: "连接状态"
+    choice: "8 态状态机"
+    rationale: "移动端需要更细粒度状态（弱网、重连中）"
+
+  - decision: "协议支持"
+    choice: "Phase 1 仅 Moonraker + MQTT"
+    rationale: "降低初期复杂度，WCP 延后"
+
+risks:
+  - risk: "SDK 适配器性能开销"
+    probability: "medium"
+    impact: "high"
+    mitigation: "Phase 1 基准测试，目标延迟 <500ms"
+
+  - risk: "后台断开恢复体验"
+    probability: "high"
+    impact: "medium"
+    mitigation: "快速重连 <2s + 加载动画"
+
+  - risk: "时间估算过于乐观"
+    probability: "high"
+    impact: "high"
+    mitigation: "每个 Phase 预留 20% buffer"
+
+acceptance_criteria:
+  functionality:
+    - "LAN 单设备连接 + 实时监控"
+    - "WAN 单设备连接 + 云端绑定"
+    - "8 态连接状态可视化"
+    - "后台断开 + 前台恢复"
+
+  quality:
+    - "Domain 层测试覆盖 100%"
+    - "Data 层测试覆盖 >70%"
+    - "Provider 层测试覆盖 >80%"
+    - "零编译警告，lint 通过"
+
+  performance:
+    - "LAN 连接建立 <3s"
+    - "WAN 连接建立 <8s"
+    - "字段更新延迟 <500ms (P95)"
+    - "前台恢复重连 <2s"
+    - "冷启动 <3s"
+
+non_goals:
+  - "WCP 协议支持（延后到 Phase 2）"
+  - "多设备群控（延后到 Phase 2+）"
+  - "OAuth 认证（延后到 Phase 2）"
+  - "离线模式（延后到 Phase 3）"
+  - "数据可视化/国际化/推送通知（延后到 Phase 3）"
+
+tech_stack:
+  framework: "Flutter 3.x"
+  language: "Dart 3.x"
+  state_management: "Riverpod 2.4+"
+  architecture: "Clean Architecture + Vertical Slice"
+  patterns: ["Adapter", "Mediator", "Repository", "Factory Chain"]
+  dependencies:
+    - "rxdart: ^0.27.7"
+    - "shared_preferences: ^2.2.0"
+    - "hive: ^2.2.3"
+    - "freezed: ^2.4.1"
+    - "synchronized: ^3.1.0"
+    - "lava_device_sdk: path:packages/lava_device_sdk"

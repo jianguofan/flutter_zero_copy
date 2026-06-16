@@ -2,19 +2,19 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: Flutter/Dart, C++ (OpenGL/Metal/D3D11), CMake
+  We use conventional commits
+  Domain: cross-platform GPU zero-copy texture sharing (macOS/Windows/Linux)
+  Related:
+    - Lava App enterprise Flutter architecture review (see specs/lava-architecture-review/)
+    - Lava App implementation spec (see specs/lava-implementation/)
+    - Verified SDK: lava-device-controll (LAN/WAN connection strategies)
 
 # Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Keep proposals under 500 words
+    - Always include a "Non-goals" section
+  tasks:
+    - Break tasks into chunks of max 2 hours

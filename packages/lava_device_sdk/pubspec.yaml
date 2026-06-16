@@ -1,0 +1,13 @@
+name: lava_device_sdk
+description: Cross-platform device control SDK with metadata-driven state management
+version: 1.0.0
+repository: https://github.com/snapmaker/lava-device-sdk
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  mqtt5_client: ^4.11.0
+  web_socket_channel: ^3.0.0
+
+dev_dependencies:
+  test: ^1.24.0

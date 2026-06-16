@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
+import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
 
 const _channel = MethodChannel('com.snapmaker.zero_copy/texture');
 
@@ -301,7 +303,22 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
 // Demo App
 // =========================================================================
 
-void main() => runApp(const ZeroCopyDemoApp());
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Snapmaker UI Demo',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.light(useMaterial3: true),
+      darkTheme: ThemeData.dark(useMaterial3: true),
+      home: const UiMigrationDemoPage(),
+    );
+  }
+}
 
 class ZeroCopyDemoApp extends StatefulWidget {
   const ZeroCopyDemoApp({super.key});

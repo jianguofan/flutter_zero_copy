@@ -27,3 +27,11 @@ cube_renderer/build/
 
 # Test artifacts
 test_iosurface
+
+# Flutter build artifacts
+*.apk
+*.ipa
+*.xcarchive
+
+# Claude
+.claude/
