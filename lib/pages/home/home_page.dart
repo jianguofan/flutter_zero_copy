@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_zero_copy/pages/home/widgets/home_side_menu.dart';
 import 'package:flutter_zero_copy/pages/projects/projects_page.dart';
+import 'package:flutter_zero_copy/pages/devices/my_devices_page.dart';
 
 /// 首页
 ///
