@@ -68,22 +68,27 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
   /// 设备网格
   Widget _buildDeviceGrid(BuildContext context) {
     // 模拟设备数据
-    final devices = [
-      DeviceInfo(
-        id: '1',
-        name: 'u11',
-        type: 'LAN',
-        ipAddress: null,
-        isOnline: true,
-      ),
-      DeviceInfo(
-        id: '2',
-        name: 'U1',
-        type: 'LAN',
-        ipAddress: 'IP:172.18.0.154',
-        isOnline: true,
-      ),
+    final devices = <DeviceInfo>[
+      // DeviceInfo(
+      //   id: '1',
+      //   name: 'u11',
+      //   type: 'LAN',
+      //   ipAddress: null,
+      //   isOnline: true,
+      // ),
+      // DeviceInfo(
+      //   id: '2',
+      //   name: 'U1',
+      //   type: 'LAN',
+      //   ipAddress: 'IP:172.18.0.154',
+      //   isOnline: true,
+      // ),
     ];
+
+    // 如果没有设备，显示空状态
+    if (devices.isEmpty) {
+      return _buildEmptyState(context);
+    }
 
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -100,6 +105,80 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
           return const AddDeviceCard();
         }
       },
+    );
+  }
+
+  /// 空状态
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 设备图标
+          Icon(
+            Icons.devices_other,
+            size: 120,
+            color: theme.colorScheme.outline.withOpacity(0.3),
+          ),
+          const SizedBox(height: 24),
+
+          // 提示文本
+          Text(
+            '暂无设备',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          Text(
+            '添加您的第一台设备开始使用',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // 添加设备按钮
+          FilledButton.icon(
+            onPressed: () {
+              _showAddDeviceDialog(context);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('添加设备'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 显示添加设备对话框
+  void _showAddDeviceDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('添加设备'),
+        content: const Text('这里将实现添加设备的功能。\n\n可以通过以下方式添加：\n• 扫描局域网设备\n• 手动输入IP地址\n• USB连接'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              debugPrint('开始扫描设备');
+            },
+            child: const Text('扫描设备'),
+          ),
+        ],
+      ),
     );
   }
 }
