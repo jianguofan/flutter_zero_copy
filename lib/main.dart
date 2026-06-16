@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
+import 'package:flutter_zero_copy/state/user_state.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
 
 const _channel = MethodChannel('com.snapmaker.zero_copy/texture');
@@ -310,12 +312,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Snapmaker UI Demo',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.light(useMaterial3: true),
-      darkTheme: ThemeData.dark(useMaterial3: true),
-      home: const UiMigrationDemoPage(),
+    return ChangeNotifierProvider(
+      create: (_) => UserState(),
+      child: MaterialApp(
+        title: 'Snapmaker UI Demo',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData.light(useMaterial3: true),
+        darkTheme: ThemeData.dark(useMaterial3: true),
+        home: const UiMigrationDemoPage(),
+      ),
     );
   }
 }

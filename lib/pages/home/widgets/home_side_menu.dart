@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_zero_copy/pages/auth/login_dialog.dart';
+import 'package:flutter_zero_copy/state/user_state.dart';
+import 'package:provider/provider.dart';
 
 /// 首页侧边栏组件
 ///
@@ -67,14 +69,17 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
   /// 用户信息区域
   Widget _buildUserSection(BuildContext context) {
     final theme = Theme.of(context);
+    final userState = context.watch<UserState>();
 
     return InkWell(
       onTap: () {
-        // 显示登录对话框
-        showDialog(
-          context: context,
-          builder: (context) => const LoginDialog(),
-        );
+        if (userState.isLoggedIn) {
+          // 已登录，显示退出登录菜单
+          _showLogoutMenu(context);
+        } else {
+          // 未登录，显示登录对话框
+          _showLoginDialog(context);
+        }
       },
       child: Container(
         padding: const EdgeInsets.all(24),
@@ -85,7 +90,7 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
               radius: 20,
               backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
               child: Icon(
-                Icons.person,
+                userState.isLoggedIn ? Icons.person : Icons.person_outline,
                 color: theme.colorScheme.primary,
               ),
             ),
@@ -94,9 +99,14 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
             // 用户名
             Expanded(
               child: Text(
-                'JG_CN1',
+                userState.isLoggedIn
+                    ? (userState.username ?? 'JG_CN1')
+                    : '未登录',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w500,
+                  color: userState.isLoggedIn
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -108,6 +118,82 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 显示登录对话框
+  void _showLoginDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const LoginDialog(),
+    );
+  }
+
+  /// 显示退出登录菜单
+  void _showLogoutMenu(BuildContext context) {
+    final theme = Theme.of(context);
+    final userState = context.read<UserState>();
+
+    showMenu(
+      context: context,
+      position: const RelativeRect.fromLTRB(0, 80, 0, 0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      items: [
+        PopupMenuItem(
+          child: Row(
+            children: [
+              Icon(
+                Icons.logout,
+                size: 20,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '退出登录',
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ],
+          ),
+          onTap: () {
+            // 延迟执行，避免菜单关闭动画冲突
+            Future.delayed(const Duration(milliseconds: 100), () {
+              _confirmLogout(context, userState);
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  /// 确认退出登录
+  void _confirmLogout(BuildContext context, UserState userState) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('确定要退出登录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              userState.logout();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('已退出登录')),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('退出'),
+          ),
+        ],
       ),
     );
   }
