@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_zero_copy/pages/auth/login_dialog.dart';
 import 'package:flutter_zero_copy/state/user_state.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// 首页侧边栏组件
 ///
 /// 包含用户信息、模型库、我的设备、近期文件等菜单
-class HomeSideMenu extends StatefulWidget {
+class HomeSideMenu extends ConsumerStatefulWidget {
   final Function(int)? onMenuItemChanged;
 
   const HomeSideMenu({
@@ -15,10 +15,10 @@ class HomeSideMenu extends StatefulWidget {
   });
 
   @override
-  State<HomeSideMenu> createState() => _HomeSideMenuState();
+  ConsumerState<HomeSideMenu> createState() => _HomeSideMenuState();
 }
 
-class _HomeSideMenuState extends State<HomeSideMenu> {
+class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
   int _selectedIndex = 0;
 
   @override
@@ -69,7 +69,7 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
   /// 用户信息区域
   Widget _buildUserSection(BuildContext context) {
     final theme = Theme.of(context);
-    final userState = context.watch<UserState>();
+    final userState = ref.watch(userStateProvider);
 
     return InkWell(
       onTap: () {
@@ -133,7 +133,6 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
   /// 显示退出登录菜单
   void _showLogoutMenu(BuildContext context) {
     final theme = Theme.of(context);
-    final userState = context.read<UserState>();
 
     showMenu(
       context: context,
@@ -160,7 +159,7 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
           onTap: () {
             // 延迟执行，避免菜单关闭动画冲突
             Future.delayed(const Duration(milliseconds: 100), () {
-              _confirmLogout(context, userState);
+              _confirmLogout(context);
             });
           },
         ),
@@ -169,7 +168,7 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
   }
 
   /// 确认退出登录
-  void _confirmLogout(BuildContext context, UserState userState) {
+  void _confirmLogout(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -183,7 +182,7 @@ class _HomeSideMenuState extends State<HomeSideMenu> {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              userState.logout();
+              ref.read(userStateProvider.notifier).logout();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('已退出登录')),
               );

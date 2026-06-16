@@ -3,37 +3,65 @@ import 'package:flutter_zero_copy/features/auth/domain/entities/token_entity.dar
 import 'package:flutter_zero_copy/features/auth/domain/services/token_service.dart';
 import 'package:flutter_zero_copy/features/auth/data/services/token_service_impl.dart';
 import 'package:flutter_zero_copy/features/auth/data/repositories/token_repository_impl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// 用户状态管理
+/// 用户状态类
 ///
-/// 集成Token管理和用户信息管理
-class UserState extends ChangeNotifier {
-  bool _isLoggedIn = false;
-  String? _username;
-  String? _avatar;
-  String? _userId;
-  TokenEntity? _token;
+/// 使用 Riverpod 管理用户登录状态和Token
+class UserState {
+  final bool isLoggedIn;
+  final String? username;
+  final String? avatar;
+  final String? userId;
+  final TokenEntity? token;
 
-  late final TokenService _tokenService;
+  const UserState({
+    this.isLoggedIn = false,
+    this.username,
+    this.avatar,
+    this.userId,
+    this.token,
+  });
 
-  UserState() {
-    _tokenService = TokenServiceImpl(TokenRepositoryImpl());
+  UserState copyWith({
+    bool? isLoggedIn,
+    String? username,
+    String? avatar,
+    String? userId,
+    TokenEntity? token,
+  }) {
+    return UserState(
+      isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      username: username ?? this.username,
+      avatar: avatar ?? this.avatar,
+      userId: userId ?? this.userId,
+      token: token ?? this.token,
+    );
+  }
+}
+
+/// TokenService Provider
+final tokenServiceProvider = Provider<TokenService>((ref) {
+  return TokenServiceImpl(TokenRepositoryImpl());
+});
+
+/// UserState StateNotifier
+class UserStateNotifier extends StateNotifier<UserState> {
+  final TokenService _tokenService;
+
+  UserStateNotifier(this._tokenService) : super(const UserState()) {
     _loadTokenAndCheckLogin();
   }
-
-  bool get isLoggedIn => _isLoggedIn;
-  String? get username => _username;
-  String? get avatar => _avatar;
-  String? get userId => _userId;
-  TokenEntity? get token => _token;
 
   /// 加载Token并检查登录状态
   Future<void> _loadTokenAndCheckLogin() async {
     final hasValid = await _tokenService.hasValidToken();
     if (hasValid) {
-      _token = await _tokenService.getToken();
-      _isLoggedIn = true;
-      notifyListeners();
+      final token = await _tokenService.getToken();
+      state = state.copyWith(
+        isLoggedIn: true,
+        token: token,
+      );
     }
   }
 
@@ -44,32 +72,30 @@ class UserState extends ChangeNotifier {
     String? userId,
     TokenEntity? token,
   }) async {
-    _isLoggedIn = true;
-    _username = username;
-    _avatar = avatar;
-    _userId = userId;
-    _token = token;
-
     // 保存Token
     if (token != null) {
       await _tokenService.saveToken(token);
     }
 
-    notifyListeners();
+    // 更新状态
+    state = UserState(
+      isLoggedIn: true,
+      username: username,
+      avatar: avatar,
+      userId: userId,
+      token: token,
+    );
   }
 
   /// 退出登录
   Future<void> logout() async {
-    _isLoggedIn = false;
-    _username = null;
-    _avatar = null;
-    _userId = null;
-    _token = null;
-
     // 清除Token
     await _tokenService.clearToken();
 
-    notifyListeners();
+    // 更新状态
+    state = const UserState(
+      isLoggedIn: false,
+    );
   }
 
   /// 获取访问令牌
@@ -85,7 +111,13 @@ class UserState extends ChangeNotifier {
   /// 刷新Token
   Future<void> refreshToken(Map<String, dynamic> response) async {
     await _tokenService.refreshTokenFromResponse(response);
-    _token = await _tokenService.getToken();
-    notifyListeners();
+    final token = await _tokenService.getToken();
+    state = state.copyWith(token: token);
   }
 }
+
+/// UserState Provider
+final userStateProvider = StateNotifierProvider<UserStateNotifier, UserState>((ref) {
+  final tokenService = ref.watch(tokenServiceProvider);
+  return UserStateNotifier(tokenService);
+});
