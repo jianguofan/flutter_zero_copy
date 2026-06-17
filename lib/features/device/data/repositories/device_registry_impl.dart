@@ -84,6 +84,7 @@ class DeviceRegistryImpl implements IDeviceRegistry {
   // ── Internal ──
 
   Future<void> _persist() async {
+    await _storage.init(); // ensure Hive box is open
     final json = _devices.map((d) => d.toJson()).toList();
     await _storage.setString(_keyDevices, jsonEncode(json));
   }

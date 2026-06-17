@@ -99,6 +99,7 @@ class DeviceHub {
         clientId: creds.clientId,
         subscribeTopics: creds.subscribeTopics,
         securityContext: creds.securityContext,
+        allowBadCertificate: creds.securityContext != null,
       )),
     )..connect();
 

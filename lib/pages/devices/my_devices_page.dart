@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_zero_copy/pages/devices/widgets/add_device_dialog.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_list_provider.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_session_provider.dart';
+import 'package:flutter_zero_copy/features/device/application/providers/device_metadata_store_provider.dart';
+import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
 
 /// 我的设备页面
 ///
@@ -73,7 +75,7 @@ class MyDevicesPage extends ConsumerWidget {
   ) {
     // 如果没有设备，显示空状态
     if (devices.isEmpty) {
-      return _buildEmptyState(context);
+      return _buildEmptyState(context, ref);
     }
 
     return GridView.builder(
@@ -100,7 +102,7 @@ class MyDevicesPage extends ConsumerWidget {
   }
 
   /// 空状态
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return Center(
       child: Column(
@@ -120,10 +122,14 @@ class MyDevicesPage extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '点击右侧的添加按钮开始添加设备',
+            '点击下方按钮开始添加设备',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.outline,
             ),
+          ),
+          const SizedBox(height: 24),
+          AddDeviceCard(
+            onDeviceAdded: (deviceInfo) => _handleDeviceAdded(ref, deviceInfo),
           ),
         ],
       ),
@@ -138,9 +144,41 @@ class MyDevicesPage extends ConsumerWidget {
 
   /// 处理设备添加
   void _handleDeviceAdded(WidgetRef ref, dynamic deviceInfo) async {
+    if (deviceInfo is! Map<String, dynamic>) {
+      debugPrint('设备信息格式错误: $deviceInfo');
+      return;
+    }
+
+    final device = deviceInfo['device'];
+    final credentials = deviceInfo['credentials'] as Map<String, dynamic>?;
+
+    if (device == null) {
+      debugPrint('设备信息中缺少 device 字段');
+      return;
+    }
+
+    final sn = credentials?['sn'] as String? ?? 'LAN-${device.ip}';
+    final deviceId = sn;
+
+    final info = DeviceInfo(
+      id: deviceId,
+      name: device.name ?? 'Unknown Device',
+      sn: sn,
+      networkType: NetworkType.lan,
+      ipAddress: device.ip,
+      createdAt: DateTime.now(),
+    );
+
+    // 持久化
     final registry = ref.read(deviceRegistryProvider);
-    // TODO: 将 deviceInfo 转换为 DeviceInfo 并注册
-    debugPrint('设备已添加: $deviceInfo');
+    await registry.register(info);
+    debugPrint('📝 Registry 注册完成: ${info.name}, 当前 registry 设备数: ${registry.devices.length}');
+
+    // 更新响应式状态
+    final notifier = ref.read(deviceMetadataStoreProvider.notifier);
+    notifier.onDeviceRegistered(info);
+    debugPrint('📝 Store 更新完成: ${info.name}, 当前 store 设备数: ${notifier.allDevices.length}');
+    debugPrint('📝 Store allDevices: ${notifier.allDevices.map((d) => d.displayName).toList()}');
   }
 }
 
@@ -250,7 +288,17 @@ class AddDeviceCard extends StatelessWidget {
     return Card(
       elevation: 2,
       child: InkWell(
-        onTap: () => _showAddDeviceDialog(context),
+        onTap: () async {
+          final result = await showDialog<Map<String, dynamic>>(
+            context: context,
+            builder: (context) => AddDeviceDialog(
+              onDeviceAdded: onDeviceAdded,
+            ),
+          );
+          if (result != null && result['success'] == true) {
+            onDeviceAdded(result);
+          }
+        },
         borderRadius: BorderRadius.circular(12),
         child: Center(
           child: Column(
@@ -272,15 +320,6 @@ class AddDeviceCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showAddDeviceDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AddDeviceDialog(
-        onDeviceAdded: onDeviceAdded,
       ),
     );
   }

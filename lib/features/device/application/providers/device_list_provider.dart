@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_metadata_store_provider.dart';
@@ -12,7 +13,7 @@ final deviceListProvider = Provider<List<DeviceInfo>>((ref) {
 
   // 从 Store 获取设备列表，转换为 DeviceInfo
   final notifier = ref.read(deviceMetadataStoreProvider.notifier);
-  return notifier.allDevices.map((metadata) {
+  final devices = notifier.allDevices.map((metadata) {
     return DeviceInfo(
       id: metadata.sn,
       name: metadata.displayName,
@@ -24,6 +25,8 @@ final deviceListProvider = Provider<List<DeviceInfo>>((ref) {
       isOnline: metadata.isOnline,
     );
   }).toList();
+  debugPrint('🔄 deviceListProvider 重新计算: ${devices.length} 个设备');
+  return devices;
 });
 
 /// Number of registered devices.

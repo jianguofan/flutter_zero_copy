@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_zero_copy/pages/ui_demo_page.dart';
 
 const _channel = MethodChannel('com.snapmaker.zero_copy/texture');
@@ -304,7 +304,11 @@ class _ZeroCopyWidgetState extends State<ZeroCopyWidget> {
 // Demo App
 // =========================================================================
 
-void main() => runApp(const ProviderScope(child: MyApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  runApp(const ProviderScope(child: MyApp()));
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

@@ -18,6 +18,11 @@ class MqttConfig {
   final Duration reconnectBackoffBase;
   final Duration reconnectBackoffMax;
 
+  /// If true, accept self-signed / untrusted server certificates during TLS
+  /// handshake. Required for LAN connections where the device broker uses a
+  /// self-signed certificate that cannot be verified through standard PKI.
+  final bool allowBadCertificate;
+
   const MqttConfig({
     required this.host,
     this.port = 1883,
@@ -31,5 +36,6 @@ class MqttConfig {
     this.maxReconnectAttempts = -1,
     this.reconnectBackoffBase = const Duration(seconds: 1),
     this.reconnectBackoffMax = const Duration(seconds: 60),
+    this.allowBadCertificate = false,
   });
 }

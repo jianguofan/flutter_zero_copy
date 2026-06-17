@@ -83,7 +83,9 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
             Flexible(
               child: Container(
                 color: Colors.white,
-                child: _isPinMode ? _buildPinModeContent(theme) : _buildIpModeContent(theme),
+                child: _isPinMode
+                    ? _buildPinModeContent(theme)
+                    : _buildIpModeContent(theme),
               ),
             ),
           ],
@@ -105,7 +107,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           const Spacer(),
           const Text(
             '添加设备',
-            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+            style: TextStyle(
+                color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
           ),
           const Spacer(),
           IconButton(
@@ -151,7 +154,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 keyboardType: TextInputType.number,
                 maxLength: 6,
@@ -174,7 +178,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
                   ),
                   child: const Text('连接', style: TextStyle(fontSize: 14)),
                 ),
@@ -241,7 +246,9 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                         child: IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          onPressed: _discoveryService.isScanning ? null : _startScanning,
+                          onPressed: _discoveryService.isScanning
+                              ? null
+                              : _startScanning,
                           icon: Icon(
                             Icons.refresh,
                             size: 18,
@@ -277,19 +284,27 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               icon: Icon(
                 Icons.cloud_outlined,
                 size: 24,
-                color: _isPinMode ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+                color: _isPinMode
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.primary,
               ),
               label: Text(
                 'PIN码绑定',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: _isPinMode ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+                  color: _isPinMode
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.primary,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isPinMode ? theme.colorScheme.primary : theme.colorScheme.surface,
-                foregroundColor: _isPinMode ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+                backgroundColor: _isPinMode
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surface,
+                foregroundColor: _isPinMode
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(color: theme.colorScheme.primary),
@@ -313,19 +328,27 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               icon: Icon(
                 Icons.router,
                 size: 24,
-                color: !_isPinMode ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+                color: !_isPinMode
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.primary,
               ),
               label: Text(
                 'IP码搜索绑定',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: !_isPinMode ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+                  color: !_isPinMode
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.primary,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: !_isPinMode ? theme.colorScheme.primary : theme.colorScheme.surface,
-                foregroundColor: !_isPinMode ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+                backgroundColor: !_isPinMode
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surface,
+                foregroundColor: !_isPinMode
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(color: theme.colorScheme.primary),
@@ -379,8 +402,10 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
             controller: _ipController,
             decoration: InputDecoration(
               hintText: '例如：192.168.1.100',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             keyboardType: TextInputType.number,
           ),
@@ -392,13 +417,15 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               onPressed: _isConnecting ? null : _connectManualIp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
               ),
               child: _isConnecting
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Text('连接', style: TextStyle(fontSize: 14)),
             ),
@@ -420,9 +447,13 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('正在搜索设备', style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14)),
+                Text('正在搜索设备',
+                    style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14)),
                 const SizedBox(width: 8),
-                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
               ],
             ),
           ],
@@ -437,9 +468,12 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           children: [
             const Icon(Icons.devices_other, size: 80, color: Colors.grey),
             const SizedBox(height: 16),
-            Text('未发现设备', style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14, color: Colors.grey)),
+            Text('未发现设备',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontSize: 14, color: Colors.grey)),
             const SizedBox(height: 8),
-            Text('请确保设备已开机并连接到同一网络', style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
+            Text('请确保设备已开机并连接到同一网络',
+                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
           ],
         ),
       );
@@ -480,12 +514,14 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                 Flexible(
                   child: Text(
                     '${device.name}\n${device.ip}',
-                    style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w400),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontSize: 14, fontWeight: FontWeight.w400),
                   ),
                 ),
                 Text(
                   ' (${device.mode})',
-                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w400),
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontSize: 14, fontWeight: FontWeight.w400),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -499,14 +535,16 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4)),
               elevation: 0,
             ),
             child: _isConnecting
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
                 : Text('连接',
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -586,7 +624,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           'port': connectionResult.credentials.port,
         };
 
-        debugPrint('证书信息已保存: ca=${_credentials!['ca'] != null}, cert=${_credentials!['cert'] != null}, key=${_credentials!['key'] != null}');
+        debugPrint(
+            '证书信息已保存: ca=${_credentials!['ca'] != null}, cert=${_credentials!['cert'] != null}, key=${_credentials!['key'] != null}');
 
         if (mounted) {
           Navigator.of(context).pop(); // 关闭进度对话框
@@ -676,5 +715,4 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
     final device = _discoveryService.addManualDevice(ip);
     await _connectToDevice(device);
   }
-
 }

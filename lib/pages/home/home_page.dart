@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_zero_copy/pages/devices/my_devices_page.dart';
 import 'package:flutter_zero_copy/pages/home/widgets/home_side_menu.dart';
 import 'package:flutter_zero_copy/pages/projects/projects_page.dart';
-import 'package:flutter_zero_copy/pages/devices/my_devices_page.dart';
+import 'package:flutter_zero_copy/shared/debug/store_debug_button.dart';
 
 /// 首页
 ///
@@ -40,7 +41,9 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainer,
-      body: Row(
+      body: Stack(
+        children: [
+          Row(
         children: [
           // 左侧边栏
           HomeSideMenu(
@@ -86,6 +89,10 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ],
+      ),
+      // 全局调试按钮
+      const StoreDebugButton(),
+    ],
       ),
     );
   }

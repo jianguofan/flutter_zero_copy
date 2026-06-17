@@ -86,6 +86,9 @@ class MqttTransport implements DeviceTransport {
     if (secCtx != null) {
       client.securityContext = secCtx;
       client.secure = true;
+      if (_config.allowBadCertificate) {
+        client.onBadCertificate = (_) => true;
+      }
     }
 
     // MQTT v5 connection message with persistent session
