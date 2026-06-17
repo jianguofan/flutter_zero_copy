@@ -2,77 +2,131 @@
 
 ## 架构分层
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ UI 层 (lib/pages/, lib/widgets/)                             │
-│                                                              │
-│  MyDevicesPage, DeviceDetailPage, AddDeviceDialog            │
-│  ref.watch() — 自动订阅/取消订阅 (Riverpod)                   │
-│  ⚠️ 只依赖 Provider 层，禁止直接 import SDK                   │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ Riverpod Provider
-┌───────────────────────────▼──────────────────────────────────┐
-│ 应用层 (lib/features/*/application/providers/)               │
-│                                                              │
-│  deviceSessionProvider       → DeviceSessionImpl (单例)      │
-│  deviceSessionStateProvider  → Stream<DeviceSessionState>    │
-│  activeDeviceProvider        → IDeviceFacade?                │
-│  deviceRegistryProvider      → DeviceRegistryImpl (单例)     │
-│  deviceListProvider          → List<DeviceInfo>              │
-│  deviceCountProvider         → int                           │
-│  deviceFieldStreamProvider   → Stream<Object?> (按字段)      │
-│  deviceFieldValueProvider    → Object? (字段快照)            │
-│  sendDeviceCommandProvider   → Future<CommandResult>         │
-│  isDeviceActiveProvider      → bool                          │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ 构造函数注入
-┌───────────────────────────▼──────────────────────────────────┐
-│ 数据层 (lib/features/*/data/)                                │
-│                                                              │
-│  DeviceSessionImpl — 会话中介者 (唯一管理活跃设备)            │
-│    ├─ state: BehaviorSubject<DeviceSessionState>              │
-│    ├─ activeDevice: DeviceImpl?                              │
-│    ├─ activate(deviceId) — 原子切换活跃设备                  │
-│    └─ deactivate() — 断开 + 释放资源                         │
-│                                                              │
-│  DeviceImpl — 设备聚合根 (IDeviceFacade 实现)                 │
-│    ├─ 字段订阅: Map<String, BehaviorSubject<dynamic>>         │
-│    ├─ 接收 MQTT 消息 → 分发到字段订阅                         │
-│    ├─ fieldStream / getField → 返回字段流/快照                │
-│    └─ sendCommand(DeviceCommand) → Future<CommandResult>     │
-│                                                              │
-│  LavaSdkConnection — IConnection 适配器                      │
-│    ├─ 包裹 DeviceClient (SDK)                                │
-│    ├─ 桥接 connectionState → statusStream                    │
-│    └─ 桥接 transport.messageStream → domain DeviceMessage    │
-│                                                              │
-│  DeviceRegistryImpl — Hive 持久化设备列表                     │
-│    ├─ register / unregister / lookup                         │
-│    └─ setActiveDevice / clearActiveDevice                    │
-└───────────────────────────┬──────────────────────────────────┘
-                            │
-┌───────────────────────────▼──────────────────────────────────┐
-│ SDK 层 (packages/lava_device_sdk/)                           │
-│                                                              │
-│  DeviceHub — 连接入口                                        │
-│    ├─ connectLan(ip, accessCode) → ConnectionResult          │
-│    ├─ connectWan(api, token) → ConnectionResult              │
-│    └─ connectWithCredentials(MqttCredentials) → ConnectionResult │
-│                                                              │
-│  DeviceClient — 设备句柄                                     │
-│    ├─ state: StateTree (字段状态树)                          │
-│    ├─ connectionState: Stream<ConnectionState>               │
-│    ├─ send(method, params) → Future<Map?>                    │
-│    └─ transport: DeviceTransport                             │
-│                                                              │
-│  ConnectionStrategy (LanStrategy / WanStrategy)               │
-│    └─ execute() → MqttCredentials                            │
-│                                                              │
-│  MqttTransport — MQTT v5 + TLS + 指数退避重连                │
-│    ├─ messageStream: Stream<TransportMessage>                │
-│    ├─ connectionState: Stream<ConnectionState>               │
-│    └─ 内置: keepAlive + 自动重连                              │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph UI["UI 层 (lib/pages/, lib/widgets/)"]
+        Pages["MyDevicesPage<br/>DeviceDetailPage<br/>AddDeviceDialog"]
+        Pages_Note["ref.watch() 自动订阅<br/>⚠️ 只依赖 Provider 层<br/>禁止直接 import SDK"]
+    end
+
+    subgraph Provider["应用层 - Riverpod Providers<br/>(lib/features/*/application/providers/)"]
+        direction TB
+        
+        subgraph StateManagement["状态管理 (StateNotifier)"]
+            StoreProvider["deviceMetadataStoreProvider<br/>StateNotifierProvider"]
+            StoreNotifier["DeviceMetadataStoreNotifier<br/>State: Map&lt;String, DeviceMetadata&gt;"]
+        end
+        
+        subgraph SessionProviders["会话管理"]
+            SessionProvider["deviceSessionProvider<br/>→ DeviceSessionImpl"]
+            SessionStateProvider["deviceSessionStateProvider<br/>→ Stream&lt;DeviceSessionState&gt;"]
+            ActiveDeviceProvider["activeDeviceProvider<br/>→ IDeviceFacade?"]
+        end
+        
+        subgraph DataProviders["数据查询"]
+            ListProvider["deviceListProvider<br/>→ List&lt;DeviceInfo&gt;"]
+            CountProvider["deviceCountProvider<br/>→ int"]
+            MetadataProvider["deviceMetadataProvider<br/>→ DeviceMetadata?"]
+        end
+        
+        subgraph FieldProviders["字段订阅"]
+            FieldStreamProvider["deviceFieldStreamProvider<br/>→ Stream&lt;T&gt;"]
+            FieldValueProvider["deviceFieldValueProvider<br/>→ T?"]
+        end
+        
+        subgraph CommandProviders["命令发送"]
+            CommandProvider["sendDeviceCommandProvider<br/>→ Future&lt;CommandResult&gt;"]
+            ActiveCheckProvider["isDeviceActiveProvider<br/>→ bool"]
+        end
+        
+        RegistryProvider["deviceRegistryProvider<br/>→ DeviceRegistryImpl"]
+    end
+
+    subgraph Data["数据层 (lib/features/*/data/)"]
+        direction TB
+        
+        subgraph Store["DeviceMetadataStore (纯数据类) ⭐"]
+            StoreClass["业务逻辑层<br/>• onMqttStatusUpdate()<br/>• onCloudDeviceList()<br/>• onDeviceRegistered()<br/>• onConnectionStateChanged()"]
+            StoreRead["读取接口<br/>• getDevice(sn)<br/>• allDevices<br/>• deviceCount"]
+            StoreMiddleware["中间件<br/>• 数据校验<br/>• staleness 标记<br/>• 快照触发<br/>• 字段合并"]
+        end
+        
+        subgraph Session["DeviceSessionImpl"]
+            SessionClass["会话中介者<br/>• state: BehaviorSubject<br/>• activeDevice: DeviceImpl?<br/>• activate(deviceId)<br/>• deactivate()"]
+        end
+        
+        subgraph Device["DeviceImpl"]
+            DeviceClass["设备聚合根<br/>• 持有 Notifier<br/>• MQTT → Notifier<br/>• fieldStream / getField<br/>• sendCommand()"]
+        end
+        
+        subgraph Adapter["LavaSdkConnection"]
+            AdapterClass["IConnection 适配器<br/>• 包裹 DeviceClient<br/>• 桥接 statusStream<br/>• 桥接 messageStream"]
+        end
+        
+        subgraph Registry["DeviceRegistryImpl"]
+            RegistryClass["Hive 持久化<br/>• register / unregister<br/>• setActiveDevice<br/>• clearActiveDevice"]
+        end
+    end
+
+    subgraph SDK["SDK 层 (packages/lava_device_sdk/)"]
+        direction TB
+        
+        Hub["DeviceHub<br/>连接入口"]
+        Client["DeviceClient<br/>设备句柄"]
+        Strategy["ConnectionStrategy<br/>LAN / WAN"]
+        Transport["MqttTransport<br/>MQTT v5 + TLS"]
+    end
+
+    %% UI → Provider
+    Pages -->|ref.watch| StoreProvider
+    Pages -->|ref.watch| ListProvider
+    Pages -->|ref.watch| SessionProvider
+    Pages -->|ref.read| CommandProvider
+
+    %% Provider 内部依赖
+    StoreProvider -->|包含| StoreNotifier
+    StoreNotifier -->|持有| StoreClass
+    SessionProvider -->|注入| StoreNotifier
+    ListProvider -->|读取| StoreNotifier
+    MetadataProvider -->|读取| StoreNotifier
+    
+    %% Provider → Data
+    SessionProvider -->|创建| SessionClass
+    SessionProvider -->|注入| RegistryProvider
+    SessionClass -->|创建| DeviceClass
+    SessionClass -->|注入 Notifier| StoreNotifier
+    DeviceClass -->|持有| StoreNotifier
+    DeviceClass -->|写入| StoreClass
+    
+    %% Data 内部
+    DeviceClass -->|使用| AdapterClass
+    AdapterClass -->|包裹| Client
+    RegistryClass -->|持久化| StoreClass
+    
+    %% 数据流
+    Client -->|MQTT 消息| AdapterClass
+    AdapterClass -->|DeviceMessage| DeviceClass
+    DeviceClass -->|调用 Notifier| StoreNotifier
+    StoreNotifier -->|更新 state| StoreClass
+    StoreClass -->|返回新 Map| StoreNotifier
+    StoreNotifier -->|触发通知| Pages
+
+    %% SDK
+    Hub -->|创建| Client
+    Strategy -->|提供凭证| Hub
+    Client -->|使用| Transport
+
+    classDef uiClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef providerClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef storeClass fill:#fff9c4,stroke:#f57f17,stroke-width:3px
+    classDef dataClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef sdkClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+
+    class Pages,Pages_Note uiClass
+    class StoreProvider,StoreNotifier,SessionProvider,ListProvider,MetadataProvider,FieldStreamProvider,CommandProvider providerClass
+    class StoreClass,StoreRead,StoreMiddleware storeClass
+    class SessionClass,DeviceClass,AdapterClass,RegistryClass dataClass
+    class Hub,Client,Strategy,Transport sdkClass
 ```
 
 ### 分层原则
@@ -80,13 +134,38 @@
 | 层 | 状态管理 | 依赖 | 职责 |
 |---|---------|------|------|
 | SDK | `Stream<T>` | 纯 Dart (`mqtt5_client`) | 设备通信协议，不关心 UI 状态管理 |
-| 数据层 | `DeviceMetadataStore` (ChangeNotifier) + `BehaviorSubject` | SDK + Hive | 统一读写入口 + 中间件 + 快照 |
-| 应用层 | Riverpod `Provider`/`StreamProvider` | 数据层 | 依赖注入，Widget 生命周期 |
-| UI 层 | `ref.watch()` / `StreamBuilder` | Riverpod + Flutter | 自动订阅/取消，状态驱动渲染 |
+| 数据层 | `DeviceMetadataStore` (纯数据类) | SDK + Hive | 业务逻辑：统一读写入口 + 中间件 + 快照 |
+| 应用层 | Riverpod `StateNotifierProvider` | 数据层 | 状态管理 + 依赖注入，Widget 生命周期 |
+| UI 层 | `ref.watch()` | Riverpod + Flutter | 自动订阅/取消，状态驱动渲染 |
 
 ---
 
-## 核心设计：DeviceMetadataStore — 唯一读写入口
+## 核心设计：纯 Riverpod 架构
+
+### DeviceMetadataStore + StateNotifier
+
+**架构演进**: 从 ChangeNotifier 迁移到纯 Riverpod
+
+```mermaid
+graph LR
+    subgraph Old["旧架构 ❌"]
+        OldStore["DeviceMetadataStore<br/>extends ChangeNotifier"]
+    end
+    
+    subgraph New["新架构 ✅"]
+        NewStore["DeviceMetadataStore<br/>纯数据类"]
+        Notifier["DeviceMetadataStoreNotifier<br/>extends StateNotifier"]
+        Notifier -->|持有| NewStore
+    end
+    
+    Old -.->|重构| New
+    
+    classDef oldClass fill:#ffcdd2,stroke:#c62828
+    classDef newClass fill:#c8e6c9,stroke:#2e7d32
+    
+    class OldStore oldClass
+    class NewStore,Notifier newClass
+```
 
 ### 为什么需要 Store
 
@@ -94,60 +173,77 @@
 
 所有数据源（MQTT、云端、本地）只往 Store 写；所有消费者（UI、Provider、日志）只从 Store 读。中间件（校验、合并策略、staleness、快照、变更日志）全部在 Store 内集中处理。
 
-```
-WRITE ─────────────────────────────────── READ
-
- MQTT ──→ DeviceImpl ──→ ┐
-                          │
- Cloud Poller ──────────→ ├─→ DeviceMetadataStore ──→ UI / Provider / 日志
-                          │        │
- Registry ──────────────→┘        │
-                          ┌───────┴────────────┐
-                          │ 中间件:              │
-                          │ • 字段合并策略       │
-                          │ • staleness 标记     │
-                          │ • 数据校验           │
-                          │ • 快照触发           │
-                          │ • 变更日志           │
-                          └────────────────────┘
+```mermaid
+graph LR
+    subgraph Write["写入数据源"]
+        MQTT["MQTT 消息"]
+        Cloud["云端轮询"]
+        Registry["本地注册"]
+    end
+    
+    subgraph Store["DeviceMetadataStore<br/>唯一入口"]
+        Middleware["中间件<br/>• 字段合并<br/>• staleness 标记<br/>• 数据校验<br/>• 快照触发"]
+    end
+    
+    subgraph Notifier["StateNotifier"]
+        StateManagement["状态管理<br/>• 更新 state<br/>• 触发通知"]
+    end
+    
+    subgraph Read["读取消费者"]
+        UI["UI"]
+        Provider["Provider"]
+        Log["日志"]
+    end
+    
+    MQTT --> Store
+    Cloud --> Store
+    Registry --> Store
+    Store --> Middleware
+    Middleware --> Notifier
+    Notifier --> UI
+    Notifier --> Provider
+    Notifier --> Log
+    
+    classDef writeClass fill:#e3f2fd,stroke:#1565c0
+    classDef storeClass fill:#fff9c4,stroke:#f57f17,stroke-width:3px
+    classDef notifierClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef readClass fill:#e8f5e9,stroke:#2e7d32
+    
+    class MQTT,Cloud,Registry writeClass
+    class Store,Middleware storeClass
+    class Notifier,StateManagement notifierClass
+    class UI,Provider,Log readClass
 ```
 
 如果写入分散在 DeviceImpl、cloudProvider、Registry 三处，任何一个中间件都需要在三处分别实现。Store 是单一入口，加一个中间件只需要改一处。
 
-### Store 实现
+### 两层架构：Store + Notifier
 
 ```dart
-class DeviceMetadataStore extends ChangeNotifier {
+// ═══ 第 1 层：DeviceMetadataStore (纯数据类) ═══
+class DeviceMetadataStore {
   final Map<String, DeviceMetadata> _devices = {};
-  final IDeviceRegistry _registry;
 
-  // ═══ 写入入口 ═══
-
-  /// MQTT 状态推送 → 写入选定设备的遥测字段
-  void onMqttStatusUpdate(String sn, Map<String, dynamic> status) {
-    final device = _devices[sn];
-    if (device == null) return;
+  // ✅ 所有方法返回新的 Map，不触发通知
+  Map<String, DeviceMetadata> onMqttStatusUpdate(String sn, Map<String, dynamic> status) {
     device.updateTelemetry(status);    // 校验 → 写入 → 标记新鲜
     _maybeCaptureSnapshot(sn, 'mqtt_update');
-    notifyListeners();
+    return Map.from(_devices);         // 返回新 Map
   }
 
-  /// 云端 device/list 全量返回 → 合并云端字段
-  void onCloudDeviceList(List<CloudDeviceDto> list) {
+  Map<String, DeviceMetadata> onCloudDeviceList(List<Map<String, dynamic>> list) {
     for (final dto in list) {
-      final device = _devices[dto.sn];
+      final device = _devices[dto['sn']];
       if (device != null) {
         device.updateCloud(dto);       // 只更新云端字段，不覆盖本地
       } else {
-        _devices[dto.sn] = DeviceMetadata.fromCloud(dto);
+        _devices[dto['sn']] = DeviceMetadata.fromCloud(dto);
       }
     }
-    // 关键：不删除不在 list 中的设备（纯本地设备保留）
-    notifyListeners();
+    return Map.from(_devices);
   }
 
-  /// 用户注册/更新设备
-  void onDeviceRegistered(DeviceInfo info) {
+  Map<String, DeviceMetadata> onDeviceRegistered(DeviceInfo info) {
     final device = _devices[info.sn];
     if (device != null) {
       device.updateLocal(info);        // 只更新本地字段
