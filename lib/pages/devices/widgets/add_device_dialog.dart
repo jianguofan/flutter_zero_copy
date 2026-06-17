@@ -1,31 +1,40 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_zero_copy/services/device_discovery_service.dart';
+import 'package:lava_device_sdk/lava_device_sdk.dart';
 
 /// 添加设备对话框
 ///
 /// 支持PIN码绑定和IP码搜索两种模式
 class AddDeviceDialog extends StatefulWidget {
-  const AddDeviceDialog({super.key});
+  final Function(dynamic)? onDeviceAdded;
+
+  const AddDeviceDialog({
+    super.key,
+    this.onDeviceAdded,
+  });
 
   @override
   State<AddDeviceDialog> createState() => _AddDeviceDialogState();
 }
 
 class _AddDeviceDialogState extends State<AddDeviceDialog> {
-  bool _isScanning = false;
   bool _showIpInput = false;
   bool _isPinMode = false; // false=IP搜索模式, true=PIN码模式
+  bool _isConnecting = false;
 
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _ipController = TextEditingController();
 
-  // 模拟设备列表
-  final List<DiscoveredDevice> _devices = [
-    DiscoveredDevice(name: 'U1Kk', ip: '172.18.6.34', mode: '局域网模式', cover: null),
-    DiscoveredDevice(name: 'HMC', ip: '172.18.6.191', mode: '局域网模式', cover: null),
-    DiscoveredDevice(name: 'U1 雷后', ip: '172.18.6.112', mode: '局域网模式', cover: null),
-    DiscoveredDevice(name: 'YuYu U1', ip: '172.18.6.240', mode: '局域网模式', cover: null),
-    DiscoveredDevice(name: 'qi', ip: '172.18.6.136', mode: '局域网模式', cover: null),
-  ];
+  final DeviceDiscoveryService _discoveryService = DeviceDiscoveryService();
+  List<DiscoveredDevice> _devices = [];
+  StreamSubscription? _deviceSubscription;
+
+  // LAN 连接相关
+  LanStrategy? _lanStrategy;
+  StreamSubscription? _progressSubscription;
+  String _connectionProgress = '';
+  Map<String, dynamic>? _credentials; // 保存证书信息
 
   @override
   void initState() {
@@ -37,20 +46,22 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
   void dispose() {
     _pinController.dispose();
     _ipController.dispose();
+    _deviceSubscription?.cancel();
+    _progressSubscription?.cancel();
+    _lanStrategy?.cancel();
+    _discoveryService.dispose();
     super.dispose();
   }
 
   void _startScanning() {
-    setState(() {
-      _isScanning = true;
-    });
-    Future.delayed(const Duration(seconds: 1), () {
+    _deviceSubscription = _discoveryService.deviceStream.listen((devices) {
       if (mounted) {
         setState(() {
-          _isScanning = false;
+          _devices = devices;
         });
       }
     });
+    _discoveryService.startScanning();
   }
 
   @override
@@ -230,7 +241,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                         child: IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          onPressed: _startScanning,
+                          onPressed: _discoveryService.isScanning ? null : _startScanning,
                           icon: Icon(
                             Icons.refresh,
                             size: 18,
@@ -378,22 +389,18 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
             width: double.infinity,
             height: 40,
             child: ElevatedButton(
-              onPressed: () {
-                final ip = _ipController.text.trim();
-                if (ip.isNotEmpty) {
-                  Navigator.of(context).pop();
-                  debugPrint('连接设备 IP: $ip');
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('请输入IP地址')),
-                  );
-                }
-              },
+              onPressed: _isConnecting ? null : _connectManualIp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              child: const Text('连接', style: TextStyle(fontSize: 14)),
+              child: _isConnecting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('连接', style: TextStyle(fontSize: 14)),
             ),
           ),
         ],
@@ -403,7 +410,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
 
   /// 设备列表
   Widget _buildDeviceList(ThemeData theme) {
-    if (_isScanning && _devices.isEmpty) {
+    if (_discoveryService.isScanning && _devices.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -418,6 +425,21 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                 const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
               ],
             ),
+          ],
+        ),
+      );
+    }
+
+    if (_devices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.devices_other, size: 80, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text('未发现设备', style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14, color: Colors.grey)),
+            const SizedBox(height: 8),
+            Text('请确保设备已开机并连接到同一网络', style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
           ],
         ),
       );
@@ -472,10 +494,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           ),
           const SizedBox(width: 8),
           ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              debugPrint('连接设备: ${device.name} (${device.ip})');
-            },
+            onPressed: _isConnecting ? null : () => _connectToDevice(device),
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
@@ -483,20 +502,179 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               elevation: 0,
             ),
-            child: Text('连接', style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onPrimary)),
+            child: _isConnecting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Text('连接',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onPrimary,
+                    )),
           ),
         ],
       ),
     );
   }
-}
 
-/// 发现的设备
-class DiscoveredDevice {
-  final String name;
-  final String ip;
-  final String mode;
-  final String? cover;
+  /// 连接到设备
+  Future<void> _connectToDevice(DiscoveredDevice device) async {
+    debugPrint('========== 开始连接设备 ==========');
+    debugPrint('设备名称: ${device.name}');
+    debugPrint('设备IP: ${device.ip}');
 
-  DiscoveredDevice({required this.name, required this.ip, required this.mode, this.cover});
+    setState(() {
+      _isConnecting = true;
+      _connectionProgress = '正在连接到 ${device.name}...';
+    });
+
+    try {
+      // 创建 LanStrategy 以监听连接进度
+      debugPrint('创建 LanStrategy...');
+      _lanStrategy = LanStrategy(
+        host: device.ip,
+        authPort: 1884,
+        accessCode: '12345678',
+      );
+
+      // 监听连接进度
+      _progressSubscription = _lanStrategy!.progressStream.listen((progress) {
+        debugPrint('连接进度: ${progress.step}');
+        if (progress.error != null) {
+          debugPrint('连接错误: ${progress.error}');
+        }
+        if (mounted) {
+          setState(() {
+            if (progress.error != null) {
+              _connectionProgress = '错误: ${progress.error}';
+            } else {
+              _connectionProgress = progress.step;
+            }
+          });
+        }
+      });
+
+      // 显示连接进度对话框
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => _buildConnectionProgressDialog(),
+        );
+      }
+
+      // 使用 DeviceHub 连接（传入 strategy 以获取进度事件）
+      debugPrint('调用 DeviceHub.connectLan...');
+      final connectionResult = await DeviceHub.connectLan(
+        ip: device.ip,
+        authPort: 1884,
+        accessCode: '12345678',
+        strategy: _lanStrategy,
+      );
+
+      if (connectionResult != null) {
+        debugPrint('连接结果: 成功');
+
+        // 从连接结果中获取证书信息
+        _credentials = {
+          'ca': connectionResult.credentials.ca,
+          'cert': connectionResult.credentials.cert,
+          'key': connectionResult.credentials.key,
+          'port': connectionResult.credentials.port,
+        };
+
+        debugPrint('证书信息已保存: ca=${_credentials!['ca'] != null}, cert=${_credentials!['cert'] != null}, key=${_credentials!['key'] != null}');
+
+        if (mounted) {
+          Navigator.of(context).pop(); // 关闭进度对话框
+
+          debugPrint('========== 连接成功 ==========');
+          // 连接成功，返回设备信息、客户端和证书
+          Navigator.of(context).pop({
+            'success': true,
+            'device': device,
+            'client': connectionResult.client,
+            'credentials': _credentials,
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('成功连接到 ${device.name}（证书已保存）'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        debugPrint('连接结果: 失败');
+
+        if (mounted) {
+          Navigator.of(context).pop(); // 关闭进度对话框
+
+          debugPrint('========== 连接失败 ==========');
+          debugPrint('失败原因: $_connectionProgress');
+          // 连接失败
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('连接失败: $_connectionProgress'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('========== 连接异常 ==========');
+      debugPrint('异常信息: $e');
+      debugPrint('堆栈跟踪: $stackTrace');
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 关闭进度对话框
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('连接异常: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isConnecting = false;
+      });
+    }
+  }
+
+  /// 连接进度对话框
+  Widget _buildConnectionProgressDialog() {
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(_connectionProgress),
+        ],
+      ),
+    );
+  }
+
+  /// 手动连接设备
+  Future<void> _connectManualIp() async {
+    final ip = _ipController.text.trim();
+    if (ip.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入IP地址')),
+      );
+      return;
+    }
+
+    // 创建手动设备
+    final device = _discoveryService.addManualDevice(ip);
+    await _connectToDevice(device);
+  }
+
 }

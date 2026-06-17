@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_zero_copy/pages/devices/widgets/add_device_dialog.dart';
+import 'package:flutter_zero_copy/features/device/application/providers/device_list_provider.dart';
+import 'package:flutter_zero_copy/features/device/application/providers/device_session_provider.dart';
 
 /// 我的设备页面
 ///
 /// 显示用户的设备列表，支持添加新设备
-class MyDevicesPage extends ConsumerStatefulWidget {
+/// ✅ 重构后: 使用 Riverpod Provider，不直接导入 SDK
+class MyDevicesPage extends ConsumerWidget {
   const MyDevicesPage({super.key});
 
   @override
-  ConsumerState<MyDevicesPage> createState() => _MyDevicesPageState();
-}
-
-class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final devices = ref.watch(deviceListProvider);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -58,7 +57,7 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
 
             // 设备网格
             Expanded(
-              child: _buildDeviceGrid(context),
+              child: _buildDeviceGrid(context, ref, devices),
             ),
           ],
         ),
@@ -67,29 +66,15 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
   }
 
   /// 设备网格
-  Widget _buildDeviceGrid(BuildContext context) {
-    // 模拟设备数据
-    final devices = <DeviceInfo>[
-      DeviceInfo(
-        id: '1',
-        name: 'u11',
-        type: 'LAN',
-        ipAddress: null,
-        isOnline: true,
-      ),
-      DeviceInfo(
-        id: '2',
-        name: 'U1',
-        type: 'LAN',
-        ipAddress: 'IP:172.18.0.154',
-        isOnline: true,
-      ),
-    ];
-
+  Widget _buildDeviceGrid(
+    BuildContext context,
+    WidgetRef ref,
+    List devices,
+  ) {
     // 如果没有设备，显示空状态
-    // if (devices.isEmpty) {
-    //   return _buildEmptyState(context);
-    // }
+    if (devices.isEmpty) {
+      return _buildEmptyState(context);
+    }
 
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -101,9 +86,14 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
       itemCount: devices.length + 1, // +1 for add button
       itemBuilder: (context, index) {
         if (index < devices.length) {
-          return DeviceCard(device: devices[index]);
+          return DeviceCard(
+            device: devices[index],
+            onRemove: () => _removeDevice(ref, devices[index].id),
+          );
         } else {
-          return const AddDeviceCard();
+          return AddDeviceCard(
+            onDeviceAdded: (deviceInfo) => _handleDeviceAdded(ref, deviceInfo),
+          );
         }
       },
     );
@@ -112,46 +102,27 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
   /// 空状态
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
-
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // 设备图标
           Icon(
-            Icons.devices_other,
-            size: 120,
-            color: theme.colorScheme.outline.withOpacity(0.3),
+            Icons.devices,
+            size: 80,
+            color: theme.colorScheme.outline,
           ),
-          const SizedBox(height: 24),
-
-          // 提示文本
+          const SizedBox(height: 16),
           Text(
-            '暂无设备',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
+            '还没有添加设备',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 8),
-
           Text(
-            '添加您的第一台设备开始使用',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // 添加设备按钮
-          FilledButton.icon(
-            onPressed: () {
-              _showAddDeviceDialog(context);
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('添加设备'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            '点击右侧的添加按钮开始添加设备',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
             ),
           ),
         ],
@@ -159,39 +130,29 @@ class _MyDevicesPageState extends ConsumerState<MyDevicesPage> {
     );
   }
 
-  /// 显示添加设备对话框
-  void _showAddDeviceDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const AddDeviceDialog(),
-    );
+  /// 删除设备
+  void _removeDevice(WidgetRef ref, String deviceId) async {
+    final registry = ref.read(deviceRegistryProvider);
+    await registry.unregister(deviceId);
   }
-}
 
-/// 设备信息
-class DeviceInfo {
-  final String id;
-  final String name;
-  final String type;
-  final String? ipAddress;
-  final bool isOnline;
-
-  DeviceInfo({
-    required this.id,
-    required this.name,
-    required this.type,
-    this.ipAddress,
-    required this.isOnline,
-  });
+  /// 处理设备添加
+  void _handleDeviceAdded(WidgetRef ref, dynamic deviceInfo) async {
+    final registry = ref.read(deviceRegistryProvider);
+    // TODO: 将 deviceInfo 转换为 DeviceInfo 并注册
+    debugPrint('设备已添加: $deviceInfo');
+  }
 }
 
 /// 设备卡片
 class DeviceCard extends StatelessWidget {
-  final DeviceInfo device;
+  final dynamic device;
+  final VoidCallback onRemove;
 
   const DeviceCard({
     super.key,
     required this.device,
+    required this.onRemove,
   });
 
   @override
@@ -199,137 +160,75 @@ class DeviceCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+      elevation: 2,
+      child: InkWell(
+        onTap: () {
+          debugPrint('点击设备: ${device.name}');
+        },
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 顶部状态栏
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              children: [
-                // 在线状态指示器
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: device.isOnline ? Colors.green : Colors.grey,
-                    shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 设备图标和状态
+              Row(
+                children: [
+                  Icon(
+                    Icons.print,
+                    size: 40,
+                    color: theme.colorScheme.primary,
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const Spacer(),
+                  // 在线状态指示器
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: device.isOnline
+                          ? Colors.green
+                          : theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-                // 连接类型
+              // 设备名称
+              Text(
+                device.name,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+
+              // 设备型号
+              if (device.model != null)
                 Text(
-                  device.type,
+                  device.model!,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: theme.colorScheme.outline,
                   ),
                 ),
 
-                const Spacer(),
+              const Spacer(),
 
-                // 链接图标
-                Icon(
-                  Icons.link,
-                  size: 16,
-                  color: theme.colorScheme.onSurfaceVariant,
+              // 删除按钮
+              Align(
+                alignment: Alignment.bottomRight,
+                child: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: onRemove,
+                  color: theme.colorScheme.error,
                 ),
-              ],
-            ),
-          ),
-
-          // 设备图片
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              child: Image.asset(
-                'assets/images/device_placeholder.png',
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(
-                    Icons.devices,
-                    size: 80,
-                    color: theme.colorScheme.outline.withOpacity(0.3),
-                  );
-                },
               ),
-            ),
+            ],
           ),
-
-          // IP地址（如果有）
-          if (device.ipAddress != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                device.ipAddress!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-
-          // 操作按钮
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // 创建建模按钮
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      debugPrint('创建建模: ${device.name}');
-                    },
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    child: const Text('创建建模'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // 设备控制按钮
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      debugPrint('设备控制: ${device.name}');
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    child: const Text('设备控制'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 设备名称
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Text(
-              device.name,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -337,72 +236,51 @@ class DeviceCard extends StatelessWidget {
 
 /// 添加设备卡片
 class AddDeviceCard extends StatelessWidget {
-  const AddDeviceCard({super.key});
+  final Function(dynamic) onDeviceAdded;
+
+  const AddDeviceCard({
+    super.key,
+    required this.onDeviceAdded,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant,
-          width: 1,
-          style: BorderStyle.solid,
-        ),
-      ),
+      elevation: 2,
       child: InkWell(
-        onTap: () {
-          debugPrint('添加设备');
-          _showAddDeviceDialog(context);
-        },
+        onTap: () => _showAddDeviceDialog(context),
         borderRadius: BorderRadius.circular(12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // 加号图标
-            Icon(
-              Icons.add,
-              size: 64,
-              color: theme.colorScheme.primary.withOpacity(0.6),
-            ),
-            const SizedBox(height: 16),
-
-            // 添加设备文本
-            Text(
-              '添加设备',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.add_circle_outline,
+                size: 60,
+                color: theme.colorScheme.primary,
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                '添加设备',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// 显示添加设备对话框
   void _showAddDeviceDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('添加设备'),
-        content: const Text('这里将实现添加设备的功能。\n\n可以通过以下方式添加：\n• 扫描局域网设备\n• 手动输入IP地址\n• USB连接'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              debugPrint('开始扫描设备');
-            },
-            child: const Text('扫描设备'),
-          ),
-        ],
+      builder: (context) => AddDeviceDialog(
+        onDeviceAdded: onDeviceAdded,
       ),
     );
   }
