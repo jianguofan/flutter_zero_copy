@@ -363,43 +363,40 @@ class DeviceImpl implements IDeviceFacade {
 
 三份数据源，只有一个 Store 负责合并：
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ DeviceMetadataStore (ChangeNotifier, 内存)                   │
-│                                                             │
-│  Map<sn, DeviceMetadata>                                    │
-│                                                             │
-│  DeviceMetadata {                                           │
-│    // 本地 (来自 Registry + 用户操作)                        │
-│    String name, ipAddress, accessCode                       │
-│    String? ca, cert, key                                    │
-│    // 云端 (来自 device/list 60s 轮询)                      │
-│    int? cloudDeviceId, String? cloudName                    │
-│    bool cloudOnline, int? printHours                        │
-│    // 遥测 (来自 MQTT 实时推送, Staleable)                   │
-│    Staleable<double> nozzleTemp                             │
-│    Staleable<String> printState                             │
-│    Staleable<int> progress                                  │
-│    // 快照 (环形缓冲, 最近 20 条)                           │
-│    List<DeviceSnapshot> snapshots                           │
-│  }                                                          │
-└────────────────────────────┬────────────────────────────────┘
-                             │ 写入来源
-      ┌──────────────────────┼──────────────────────┐
-      │                      │                      │
-┌─────▼──────────┐  ┌────────▼────────┐  ┌──────────▼──────────┐
-│ 本地 Registry  │  │ 云端 device/list│  │ MQTT (DeviceImpl)   │
-│ (Hive 持久化)  │  │ (HTTP 60s轮询) │  │ (实时推送)           │
-├────────────────┤  ├────────────────┤  ├─────────────────────┤
-│ 所有者:        │  │ 所有者:        │  │ 所有者:             │
-│ RegistryImpl   │  │ cloudDeviceList │  │ DeviceImpl          │
-│                │  │ Provider        │  │                     │
-│ 写入触发:      │  │ 写入触发:      │  │ 写入触发:           │
-│ register()     │  │ Timer 60s      │  │ MQTT 消息到达       │
-│ 写入路径:      │  │ 写入路径:      │  │ 写入路径:           │
-│ Registry       │  │ HTTP → Store   │  │ DeviceImpl → Store  │
-│ → Store        │  │                │  │                     │
-└────────────────┘  └────────────────┘  └─────────────────────┘
+```mermaid
+graph TB
+    subgraph Store["DeviceMetadataStore (纯数据类, 内存)"]
+        StoreData["Map&lt;sn, DeviceMetadata&gt;"]
+        
+        subgraph Metadata["DeviceMetadata 结构"]
+            Local["本地字段<br/>(Registry + 用户操作)<br/>• name, ipAddress, accessCode<br/>• pinCode, model, firmwareVersion"]
+            Cloud["云端字段<br/>(device/list 60s 轮询)<br/>• cloudDeviceId, cloudName<br/>• cloudOnline, printHours"]
+            Telemetry["遥测字段<br/>(MQTT 实时推送, Staleable)<br/>• Staleable&lt;double&gt; nozzleTemp<br/>• Staleable&lt;String&gt; printState<br/>• Staleable&lt;int&gt; progress"]
+            Snapshot["快照<br/>(环形缓冲, 最近 20 条)<br/>• List&lt;DeviceSnapshot&gt; snapshots"]
+        end
+    end
+    
+    subgraph Sources["三个写入数据源"]
+        direction LR
+        
+        Source1["本地 Registry<br/>(Hive 持久化)<br/><br/>所有者: DeviceRegistryImpl<br/>写入触发: register()<br/>写入路径: Registry → Store"]
+        Source2["云端 device/list<br/>(HTTP 60s 轮询)<br/><br/>所有者: cloudDeviceListProvider<br/>写入触发: Timer 60s<br/>写入路径: HTTP → Store"]
+        Source3["MQTT<br/>(实时推送)<br/><br/>所有者: DeviceImpl<br/>写入触发: MQTT 消息到达<br/>写入路径: DeviceImpl → Store"]
+    end
+    
+    Source1 -->|onDeviceRegistered| Store
+    Source2 -->|onCloudDeviceList| Store
+    Source3 -->|onMqttStatusUpdate| Store
+    
+    StoreData --> Metadata
+    
+    classDef storeClass fill:#fff9c4,stroke:#f57f17,stroke-width:3px
+    classDef sourceClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef dataClass fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    
+    class Store,StoreData storeClass
+    class Source1,Source2,Source3 sourceClass
+    class Local,Cloud,Telemetry,Snapshot dataClass
 ```
 
 ### 字段所有权与合并规则
@@ -409,7 +406,7 @@ class DeviceImpl implements IDeviceFacade {
 | 字段 | 写入源 | Store 写入方法 | 合并规则 |
 |------|-------|---------------|---------|
 | `name`, `ipAddress`, `accessCode` | 本地 Registry | `onDeviceRegistered` | 云端不覆盖 |
-| `ca`, `cert`, `key`, `tlsPort` | 本地 Registry | `onDeviceRegistered` | 云端不覆盖 |
+| `pinCode`, `model`, `firmwareVersion` | 本地 Registry | `onDeviceRegistered` | 云端不覆盖 |
 | `cloudName`, `cloudOnline` | 云端 device/list | `onCloudDeviceList` | 每60s全量替换云端字段 |
 | `printHours`, `cloudDeviceId` | 云端 device/list | `onCloudDeviceList` | 每60s全量替换云端字段 |
 | `nozzleTemp`, `bedTemp` | MQTT 推送 | `onMqttStatusUpdate` | 实时覆盖 |
