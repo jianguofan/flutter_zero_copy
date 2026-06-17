@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:lava_device_sdk/src/models/connection_state.dart';
 import 'package:lava_device_sdk/src/transport/transport.dart';
 
 class WebSocketConfig {
@@ -14,6 +15,7 @@ class WebSocketTransport implements DeviceTransport {
   final WebSocketConfig _config;
   WebSocketChannel? _channel;
   final StreamController<TransportMessage> _messageController = StreamController.broadcast();
+  final _connectionStateController = StreamController<ConnectionState>.broadcast();
 
   WebSocketTransport({required WebSocketConfig config}) : _config = config;
 
@@ -21,17 +23,24 @@ class WebSocketTransport implements DeviceTransport {
   Stream<TransportMessage> get messageStream => _messageController.stream;
 
   @override
+  Stream<ConnectionState> get connectionState => _connectionStateController.stream;
+
+  @override
   bool get isConnected => _channel != null;
 
   @override
   Future<void> connect() async {
+    _connectionStateController.add(ConnectionState.connecting);
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_config.url));
     } catch (e, stack) {
       stderr.writeln('[WebSocketTransport] connect failed: $e\n$stack');
       _messageController.addError(e, stack);
+      _connectionStateController.add(ConnectionState.disconnected);
       rethrow;
     }
+
+    _connectionStateController.add(ConnectionState.connected);
 
     _channel!.stream.listen(
       (data) {
@@ -43,11 +52,13 @@ class WebSocketTransport implements DeviceTransport {
       onError: (Object error, StackTrace stack) {
         stderr.writeln('[WebSocketTransport] stream error: $error\n$stack');
         _channel = null;
+        _connectionStateController.add(ConnectionState.disconnected);
         _messageController.addError(error, stack);
       },
       onDone: () {
         stderr.writeln('[WebSocketTransport] stream closed');
         _channel = null;
+        _connectionStateController.add(ConnectionState.disconnected);
       },
     );
   }
@@ -63,6 +74,7 @@ class WebSocketTransport implements DeviceTransport {
 
   @override
   Future<void> disconnect() async {
+    _connectionStateController.add(ConnectionState.disconnected);
     try {
       await _channel?.sink.close();
     } catch (e, stack) {
@@ -74,5 +86,6 @@ class WebSocketTransport implements DeviceTransport {
   Future<void> dispose() async {
     await disconnect();
     await _messageController.close();
+    await _connectionStateController.close();
   }
 }

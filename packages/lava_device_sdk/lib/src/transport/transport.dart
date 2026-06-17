@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:typed_data';
+
+import 'package:lava_device_sdk/src/models/connection_state.dart';
 
 /// Abstract transport layer. Implement for MQTT, WebSocket, etc.
 abstract class DeviceTransport {
@@ -16,6 +19,10 @@ abstract class DeviceTransport {
 
   /// Whether currently connected.
   bool get isConnected;
+
+  /// Stream of connection state changes (connecting, connected, disconnected,
+  /// reconnecting).
+  Stream<ConnectionState> get connectionState;
 
   /// Clean up all resources.
   Future<void> dispose();

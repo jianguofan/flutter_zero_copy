@@ -47,3 +47,9 @@ export 'src/device_hub.dart' show DeviceHub;
 
 // MqttCredentials
 export 'src/models/mqtt_credentials.dart' show MqttCredentials;
+
+// ConnectionResult
+export 'src/models/connection_result.dart' show ConnectionResult;
+
+// ConnectionState
+export 'src/models/connection_state.dart' show ConnectionState;

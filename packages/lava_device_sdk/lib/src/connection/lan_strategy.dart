@@ -22,6 +22,7 @@ class LanStrategy implements ConnectionStrategy {
   StreamSubscription? _msgSub;
   int _seqId = 0;
   final _pending = <int, Completer<Map<String, dynamic>>>{};
+  Completer<Map<String, dynamic>?>? _authNotificationCompleter;
   bool _cancelled = false;
 
   LanStrategy({
@@ -126,45 +127,14 @@ class LanStrategy implements ConnectionStrategy {
   }
 
   Future<Map<String, dynamic>?> _waitForAuthNotification() async {
-    final completer = Completer<Map<String, dynamic>?>();
-    late StreamSubscription sub;
-
-    sub = _msgSub = _authTransport!.messageStream.listen((msg) {
-      try {
-        final payload = utf8.decode(msg.payload);
-        final json = jsonDecode(payload) as Map<String, dynamic>;
-        // The auth notification arrives as a result containing sn/cert/key/etc.
-        if (json['result'] is Map) {
-          final r = json['result'] as Map;
-          if (r['sn'] != null && (r['cert'] != null || r['ca'] != null)) {
-            sub.cancel();
-            if (!completer.isCompleted) completer.complete(r as Map<String, dynamic>);
-            return;
-          }
-        }
-        // Handle notify_cloud_auth notification
-        if (json['method'] == 'notify_cloud_auth' && json['params'] is List) {
-          final params = json['params'] as List;
-          if (params.isNotEmpty && params[0] is Map) {
-            final p = params[0] as Map;
-            if (p['state'] == 'approve' && p['result'] is Map) {
-              sub.cancel();
-              if (!completer.isCompleted) {
-                completer.complete(p['result'] as Map<String, dynamic>);
-              }
-              return;
-            }
-          }
-        }
-      } catch (_) {}
-    });
+    _authNotificationCompleter = Completer<Map<String, dynamic>?>();
 
     try {
-      return await completer.future.timeout(const Duration(seconds: 30));
+      return await _authNotificationCompleter!.future.timeout(const Duration(seconds: 30));
     } on TimeoutException {
       return null;
     } finally {
-      sub.cancel();
+      _authNotificationCompleter = null;
     }
   }
 
@@ -195,9 +165,49 @@ class LanStrategy implements ConnectionStrategy {
   void _onMessage(TransportMessage msg) {
     try {
       final json = jsonDecode(utf8.decode(msg.payload)) as Map<String, dynamic>;
+
+      // Handle RPC responses (have 'id' field)
       final id = json['id'];
       if (id is num && _pending.containsKey(id.toInt())) {
         _pending.remove(id.toInt())!.complete(json);
+        return;
+      }
+
+      // Handle notifications (have 'method' field)
+      final method = json['method'] as String?;
+      if (method != null && _authNotificationCompleter != null && !_authNotificationCompleter!.isCompleted) {
+        // Handle notify_lan_auth notification (LAN mode)
+        if (method == 'notify_lan_auth' && json['params'] is List) {
+          final params = json['params'] as List;
+          if (params.isNotEmpty && params[0] is Map) {
+            final p = params[0] as Map;
+            final state = p['state'] as String?;
+
+            if (state == 'approve') {
+              // Certificate data is directly in params[0], not in params[0]['result']
+              _authNotificationCompleter!.complete(p as Map<String, dynamic>);
+            } else if (state == 'denied') {
+              _authNotificationCompleter!.complete(null);
+            }
+            return;
+          }
+        }
+
+        // Handle notify_cloud_auth notification (WAN mode fallback)
+        if (method == 'notify_cloud_auth' && json['params'] is List) {
+          final params = json['params'] as List;
+          if (params.isNotEmpty && params[0] is Map) {
+            final p = params[0] as Map;
+            final state = p['state'] as String?;
+
+            if (state == 'approve') {
+              _authNotificationCompleter!.complete(p as Map<String, dynamic>);
+            } else if (state == 'denied') {
+              _authNotificationCompleter!.complete(null);
+            }
+            return;
+          }
+        }
       }
     } catch (_) {}
   }
@@ -235,6 +245,9 @@ class LanStrategy implements ConnectionStrategy {
       securityContext: secCtx,
       subscribeTopics: MqttCredentials.defaultSubscribeTopics(sn),
       publishTopic: MqttCredentials.defaultPublishTopic(sn),
+      ca: ca,
+      cert: cert,
+      key: key,
     );
   }
 

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:mqtt5_client/mqtt5_client.dart';
 import 'package:mqtt5_client/mqtt5_server_client.dart';
 import 'package:lava_device_sdk/src/data/connection_metrics.dart';
+import 'package:lava_device_sdk/src/models/connection_state.dart';
 import 'package:lava_device_sdk/src/models/types.dart';
 import 'package:lava_device_sdk/src/transport/transport.dart';
 
@@ -28,6 +29,9 @@ class MqttTransport implements DeviceTransport {
   // Disconnect event stream (for LinkQualityMonitor)
   final _disconnectController = StreamController<void>.broadcast();
 
+  // Connection state stream
+  final _connectionStateController = StreamController<ConnectionState>.broadcast();
+
   /// Stream of PUBACK round-trip delays (App → Broker → App).
   /// Each event is the time between publishMessage() and the broker's PUBACK.
   /// In WAN mode this covers only the App ↔ AWS IoT segment.
@@ -35,6 +39,9 @@ class MqttTransport implements DeviceTransport {
 
   /// Stream of unsolicited disconnect events.
   Stream<void> get onDisconnectStream => _disconnectController.stream;
+
+  @override
+  Stream<ConnectionState> get connectionState => _connectionStateController.stream;
 
   MqttTransport({
     required MqttConfig config,
@@ -53,6 +60,7 @@ class MqttTransport implements DeviceTransport {
   Future<void> connect() async {
     _intentionalDisconnect = false;
     _reconnectAttempts = 0;
+    _connectionStateController.add(ConnectionState.connecting);
     await _doConnect();
   }
 
@@ -123,6 +131,7 @@ class MqttTransport implements DeviceTransport {
       metrics.recordConnectSuccess();
     }
     _reconnectAttempts = 0;
+    _connectionStateController.add(ConnectionState.connected);
 
     for (final topic in _config.subscribeTopics) {
       client.subscribe(topic, MqttQos.atLeastOnce);
@@ -168,7 +177,11 @@ class MqttTransport implements DeviceTransport {
   void _onDisconnected() {
     _disconnectController.add(null);
     metrics.recordDisconnect(intentional: _intentionalDisconnect);
-    if (_intentionalDisconnect) return;
+    if (_intentionalDisconnect) {
+      _connectionStateController.add(ConnectionState.disconnected);
+      return;
+    }
+    _connectionStateController.add(ConnectionState.reconnecting);
     _scheduleReconnect();
   }
 
@@ -179,6 +192,7 @@ class MqttTransport implements DeviceTransport {
         _reconnectAttempts >= _config.maxReconnectAttempts) {
       stderr.writeln(
           '[MqttTransport] max reconnect attempts (${_config.maxReconnectAttempts}) reached');
+      _connectionStateController.add(ConnectionState.disconnected);
       return;
     }
 
@@ -225,6 +239,7 @@ class MqttTransport implements DeviceTransport {
     _intentionalDisconnect = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _connectionStateController.add(ConnectionState.disconnected);
     try {
       _client?.disconnect();
     } catch (e, stack) {
@@ -238,5 +253,6 @@ class MqttTransport implements DeviceTransport {
     await _messageController.close();
     await _pubAckController.close();
     await _disconnectController.close();
+    await _connectionStateController.close();
   }
 }

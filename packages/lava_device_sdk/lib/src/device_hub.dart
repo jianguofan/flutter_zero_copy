@@ -5,6 +5,8 @@ import 'package:lava_device_sdk/src/connection/connection_strategy.dart';
 import 'package:lava_device_sdk/src/connection/lan_strategy.dart';
 import 'package:lava_device_sdk/src/connection/wan_strategy.dart';
 import 'package:lava_device_sdk/src/core/schema.dart';
+import 'package:lava_device_sdk/src/models/connection_result.dart';
+import 'package:lava_device_sdk/src/models/mqtt_credentials.dart';
 import 'package:lava_device_sdk/src/models/types.dart';
 import 'package:lava_device_sdk/src/mqtt/mqtt_transport.dart';
 
@@ -35,9 +37,10 @@ class DeviceHub {
 
   /// Connect via LAN (device on local network).
   ///
-  /// Returns [DeviceClient] on success, null on failure.
+  /// Returns [ConnectionResult] on success (containing both [DeviceClient] and
+  /// [MqttCredentials] for caching), null on failure.
   /// Listen to [strategy.progressStream] for step-by-step status.
-  static Future<DeviceClient?> connectLan({
+  static Future<ConnectionResult?> connectLan({
     required String ip,
     int authPort = 1884,
     String accessCode = '12345678',
@@ -56,7 +59,7 @@ class DeviceHub {
   ///
   /// PIN acquisition: provide [deviceIp] + [sn] for auto-retrieval via LAN,
   /// or provide [pinCode] directly if known.
-  static Future<DeviceClient?> connectWan({
+  static Future<ConnectionResult?> connectWan({
     required CloudApiClient api,
     required String token,
     String? deviceIp,
@@ -78,7 +81,7 @@ class DeviceHub {
   }
 
   /// Generic: connect using any [ConnectionStrategy].
-  static Future<DeviceClient?> _connect(
+  static Future<ConnectionResult?> _connect(
     ConnectionStrategy strategy, {
     DeviceSchema? schema,
   }) async {
@@ -87,7 +90,7 @@ class DeviceHub {
 
     final usedSchema = schema ?? DeviceSchema.fromJson(_defaultSchema(creds.sn));
 
-    return DeviceClient(
+    final client = DeviceClient(
       schema: usedSchema,
       adapter: MoonrakerAdapter.fromDataSource(usedSchema.dataSource),
       transport: MqttTransport(config: MqttConfig(
@@ -98,6 +101,37 @@ class DeviceHub {
         securityContext: creds.securityContext,
       )),
     )..connect();
+
+    return ConnectionResult(client: client, credentials: creds);
+  }
+
+  /// Reconnect using previously obtained [MqttCredentials] (e.g., from a cached
+  /// certificate). Skips the pre-connection strategy entirely — ideal for fast
+  /// reconnection without re-authorization.
+  ///
+  /// If [credentials.securityContext] is null but raw [ca]/[cert]/[key] strings
+  /// are present on the credentials, a fresh [SecurityContext] is reconstructed
+  /// automatically via [MqttCredentials.getOrCreateSecurityContext].
+  static Future<ConnectionResult?> connectWithCredentials(
+    MqttCredentials credentials, {
+    DeviceSchema? schema,
+  }) async {
+    final secCtx = credentials.getOrCreateSecurityContext();
+    final usedSchema = schema ?? DeviceSchema.fromJson(_defaultSchema(credentials.sn));
+
+    final client = DeviceClient(
+      schema: usedSchema,
+      adapter: MoonrakerAdapter.fromDataSource(usedSchema.dataSource),
+      transport: MqttTransport(config: MqttConfig(
+        host: credentials.host,
+        port: credentials.port,
+        clientId: credentials.clientId,
+        subscribeTopics: credentials.subscribeTopics,
+        securityContext: secCtx,
+      )),
+    )..connect();
+
+    return ConnectionResult(client: client, credentials: credentials);
   }
 
   static Map<String, dynamic> _defaultSchema(String sn) => {

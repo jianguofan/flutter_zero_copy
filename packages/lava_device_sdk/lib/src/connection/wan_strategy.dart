@@ -141,6 +141,9 @@ class WanStrategy implements ConnectionStrategy {
       securityContext: secCtx,
       subscribeTopics: MqttCredentials.defaultSubscribeTopics(sn),
       publishTopic: MqttCredentials.defaultPublishTopic(sn),
+      ca: certConfig.ca,
+      cert: certConfig.cert,
+      key: certConfig.key,
     );
   }
 

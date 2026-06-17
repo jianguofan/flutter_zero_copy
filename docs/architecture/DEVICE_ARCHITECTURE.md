@@ -144,29 +144,6 @@ graph TB
 
 ### DeviceMetadataStore + StateNotifier
 
-**架构演进**: 从 ChangeNotifier 迁移到纯 Riverpod
-
-```mermaid
-graph LR
-    subgraph Old["旧架构 ❌"]
-        OldStore["DeviceMetadataStore<br/>extends ChangeNotifier"]
-    end
-    
-    subgraph New["新架构 ✅"]
-        NewStore["DeviceMetadataStore<br/>纯数据类"]
-        Notifier["DeviceMetadataStoreNotifier<br/>extends StateNotifier"]
-        Notifier -->|持有| NewStore
-    end
-    
-    Old -.->|重构| New
-    
-    classDef oldClass fill:#ffcdd2,stroke:#c62828
-    classDef newClass fill:#c8e6c9,stroke:#2e7d32
-    
-    class OldStore oldClass
-    class NewStore,Notifier newClass
-```
-
 ### 为什么需要 Store
 
 **DeviceMetadataStore 的全部价值不在于"缓存"，而在于它是数据进入系统的唯一入口。**

@@ -3,6 +3,7 @@ import 'package:lava_device_sdk/src/adapter/moonraker/moonraker_adapter.dart';
 import 'package:lava_device_sdk/src/adapter/moonraker/moonraker_config.dart';
 import 'package:lava_device_sdk/src/core/schema.dart';
 import 'package:lava_device_sdk/src/core/state_tree.dart';
+import 'package:lava_device_sdk/src/models/connection_state.dart';
 import 'package:lava_device_sdk/src/models/types.dart';
 import 'package:lava_device_sdk/src/mqtt/mqtt_transport.dart';
 import 'package:lava_device_sdk/src/transport/transport.dart';
@@ -55,6 +56,10 @@ class DeviceClient {
   DeviceTransport get transport => _transport;
 
   bool get isConnected => _transport.isConnected;
+
+  /// Stream of connection state changes.
+  /// Delegates to the underlying transport.
+  Stream<ConnectionState> get connectionState => _transport.connectionState;
 
   Future<void> connect() async {
     // Listen for outgoing adapter messages → transport send
