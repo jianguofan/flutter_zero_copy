@@ -16,12 +16,14 @@ class LavaSdkConnection implements IConnection {
   final StreamController<ConnectionStatus> _statusController;
   final StreamController<DeviceMessage> _messageController;
   StreamSubscription? _transportSub;
+  StreamSubscription? _connectionStateSub;
   ConnectionStatus _status = ConnectionStatus.idle;
 
   LavaSdkConnection._(this._client)
       : _statusController = StreamController<ConnectionStatus>.broadcast(),
         _messageController = StreamController<DeviceMessage>.broadcast() {
     _listenToTransport();
+    _listenToConnectionState();
   }
 
   // ── Factory methods ──
@@ -33,14 +35,14 @@ class LavaSdkConnection implements IConnection {
     String accessCode = '12345678',
     DeviceSchema? schema,
   }) async {
-    final client = await DeviceHub.connectLan(
+    final result = await DeviceHub.connectLan(
       ip: ip,
       authPort: authPort,
       accessCode: accessCode,
       schema: schema,
     );
-    if (client == null) return null;
-    return LavaSdkConnection._(client);
+    if (result == null) return null;
+    return LavaSdkConnection._(result.client);
   }
 
   /// Create a WAN connection via [DeviceHub.connectWan].
@@ -52,7 +54,7 @@ class LavaSdkConnection implements IConnection {
     String? pinCode,
     DeviceSchema? schema,
   }) async {
-    final client = await DeviceHub.connectWan(
+    final result = await DeviceHub.connectWan(
       api: api,
       token: token,
       deviceIp: deviceIp,
@@ -60,8 +62,8 @@ class LavaSdkConnection implements IConnection {
       pinCode: pinCode,
       schema: schema,
     );
-    if (client == null) return null;
-    return LavaSdkConnection._(client);
+    if (result == null) return null;
+    return LavaSdkConnection._(result.client);
   }
 
   // ── IConnection implementation ──
@@ -77,6 +79,12 @@ class LavaSdkConnection implements IConnection {
 
   @override
   Future<void> connect() async {
+    // DeviceHub already connected the client (via ..connect() in _connect).
+    // Avoid double-connecting which would re-subscribe message streams.
+    if (_client.isConnected) {
+      _setStatus(ConnectionStatus.connected);
+      return;
+    }
     _setStatus(ConnectionStatus.connecting);
     try {
       await _client.connect();
@@ -131,13 +139,38 @@ class LavaSdkConnection implements IConnection {
     });
   }
 
+  /// Bridge SDK [DeviceClient.connectionState] to [IConnection.statusStream].
+  /// This replaces manual status tracking — the SDK's [MqttTransport] is the
+  /// authoritative source for connection state (including automatic reconnects).
+  void _listenToConnectionState() {
+    // Initial state: DeviceHub already called client.connect(), so we start
+    // from the transport's actual state rather than assuming idle.
+    if (_client.isConnected) {
+      _setStatus(ConnectionStatus.connected);
+    }
+    _connectionStateSub = _client.connectionState.listen((state) {
+      _setStatus(_mapSdkConnectionState(state));
+    });
+  }
+
+  ConnectionStatus _mapSdkConnectionState(ConnectionState state) {
+    return switch (state) {
+      ConnectionState.disconnected => ConnectionStatus.disconnected,
+      ConnectionState.connecting   => ConnectionStatus.connecting,
+      ConnectionState.connected    => ConnectionStatus.connected,
+      ConnectionState.reconnecting => ConnectionStatus.connecting,
+    };
+  }
+
   void _setStatus(ConnectionStatus newStatus) {
+    if (_status == newStatus) return;
     _status = newStatus;
     _statusController.add(newStatus);
   }
 
   /// Release resources held by the adapter.
   Future<void> dispose() async {
+    await _connectionStateSub?.cancel();
     await _transportSub?.cancel();
     await _statusController.close();
     await _messageController.close();

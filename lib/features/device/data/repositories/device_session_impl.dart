@@ -1,5 +1,6 @@
 import 'package:flutter_zero_copy/features/device/data/adapters/lava_sdk_connection.dart';
 import 'package:flutter_zero_copy/features/device/data/models/device_impl.dart';
+import 'package:flutter_zero_copy/features/device/application/providers/device_metadata_store_provider.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
 import 'package:flutter_zero_copy/features/device/domain/interfaces/i_connection.dart';
 import 'package:flutter_zero_copy/features/device/domain/interfaces/i_device_facade.dart';
@@ -11,15 +12,20 @@ import 'package:rxdart/rxdart.dart';
 ///
 /// Orchestrates [IDeviceRegistry] lookups + [IDeviceFacade] lifecycle.
 /// The ONLY component that owns the "current active device" concept.
+///
+/// **重构**: 注入 DeviceMetadataStoreNotifier，传递给 DeviceImpl
 class DeviceSessionImpl implements IDeviceSession {
   final IDeviceRegistry _registry;
+  final DeviceMetadataStoreNotifier _notifier; // ← 注入 Notifier
 
   final BehaviorSubject<DeviceSessionState> _stateController;
   DeviceImpl? _activeDevice;
 
   DeviceSessionImpl({
     required IDeviceRegistry registry,
+    required DeviceMetadataStoreNotifier notifier, // ← 构造函数注入
   })  : _registry = registry,
+        _notifier = notifier,
         _stateController =
             BehaviorSubject<DeviceSessionState>.seeded(const DeviceSessionIdle());
 
@@ -72,8 +78,12 @@ class DeviceSessionImpl implements IDeviceSession {
         return;
       }
 
-      // Step 5: Create DeviceImpl aggregate
-      _activeDevice = DeviceImpl(info: info, connection: connection);
+      // Step 5: Create DeviceImpl aggregate (注入 Notifier)
+      _activeDevice = DeviceImpl(
+        info: info,
+        connection: connection,
+        notifier: _notifier, // ← 传递 Notifier
+      );
 
       // Step 6: Establish transport connection
       await _activeDevice!.connect();

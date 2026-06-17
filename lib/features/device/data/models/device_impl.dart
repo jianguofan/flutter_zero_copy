@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_zero_copy/features/device/application/providers/device_metadata_store_provider.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_command.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_message.dart';
@@ -9,17 +10,19 @@ import 'package:rxdart/rxdart.dart';
 
 /// Aggregate root implementing [IDeviceFacade].
 ///
-/// Owns an [IConnection], manages heartbeat, message routing, and
-/// field-level subscriptions with configurable backpressure.
+/// **重构后职责**:
+/// - MQTT 消息 → 通过 StateNotifier 写入 Store
+/// - 不再自己缓存字段数据
+/// - fieldStream / getField → 从 Notifier 读取
+/// - sendCommand → 发送命令，失败时触发快照
+///
+/// **依赖注入**: DeviceMetadataStoreNotifier (Riverpod StateNotifier)
 class DeviceImpl implements IDeviceFacade {
   @override
   final DeviceInfo info;
 
   final IConnection _connection;
-  Timer? _heartbeatTimer;
-
-  // ── Field subscriptions ──
-  final Map<String, BehaviorSubject<dynamic>> _fieldSubscriptions = {};
+  final DeviceMetadataStoreNotifier _notifier; // ← 注入 StateNotifier
 
   // ── State ──
   final BehaviorSubject<DeviceConnectionState> _connectionStateSubject;
@@ -30,14 +33,17 @@ class DeviceImpl implements IDeviceFacade {
   DeviceImpl({
     required this.info,
     required IConnection connection,
+    required DeviceMetadataStoreNotifier notifier, // ← 构造函数注入
   })  : _connection = connection,
-        _connectionStateSubject =
-            BehaviorSubject<DeviceConnectionState>.seeded(
-                DeviceConnectionState.idle) {
+        _notifier = notifier,
+        _connectionStateSubject = BehaviorSubject<DeviceConnectionState>.seeded(
+            DeviceConnectionState.idle) {
     _listenToConnection();
   }
 
-  // ── IDeviceFacade ──
+  // ══════════════════════════════════════════════════════════════
+  // IDeviceFacade
+  // ══════════════════════════════════════════════════════════════
 
   @override
   DeviceConnectionState get connectionState => _connectionState;
@@ -51,18 +57,17 @@ class DeviceImpl implements IDeviceFacade {
 
   @override
   Stream<T> fieldStream<T>(String fieldPath) {
-    final sub = _fieldSubscriptions.putIfAbsent(
-      fieldPath,
-      () => BehaviorSubject<dynamic>(),
-    );
-    return sub.stream.cast<T>();
+    // ✅ 从 Notifier 读取字段流
+    // 定期从 Notifier 读取最新值
+    return Stream.periodic(const Duration(milliseconds: 500), (_) {
+      return _notifier.getDevice(info.sn)?.getField<T>(fieldPath);
+    }).whereType<T>().distinct();
   }
 
   @override
   T? getField<T>(String fieldPath) {
-    final sub = _fieldSubscriptions[fieldPath];
-    if (sub == null || !sub.hasValue) return null;
-    return sub.value as T?;
+    // ✅ 从 Notifier 读取字段快照
+    return _notifier.getDevice(info.sn)?.getField<T>(fieldPath);
   }
 
   @override
@@ -82,7 +87,16 @@ class DeviceImpl implements IDeviceFacade {
         success: true,
         completedAt: DateTime.now(),
       );
-    } catch (e) {
+    } catch (e, st) {
+      // ✅ 命令失败 → 触发快照（通过 Notifier）
+      _notifier.captureSnapshot(
+        info.sn,
+        'command_failed',
+        context: '发送命令: ${command.method}',
+        error: e,
+        stackTrace: st,
+      );
+
       return CommandResult(
         commandId: command.id,
         success: false,
@@ -92,63 +106,42 @@ class DeviceImpl implements IDeviceFacade {
     }
   }
 
-  // ── Lifecycle ──
+  // ══════════════════════════════════════════════════════════════
+  // Lifecycle
+  // ══════════════════════════════════════════════════════════════
 
-  /// Establish transport connection and start heartbeat.
+  /// Establish transport connection.
+  ///
+  /// Reconnection on disconnect is handled automatically by the SDK's
+  /// [MqttTransport] exponential-backoff mechanism — no separate watchdog
+  /// timer is needed at this layer.
   Future<void> connect() async {
     _setState(DeviceConnectionState.connecting);
     try {
       await _connection.connect();
       _setState(DeviceConnectionState.connected);
-      _startHeartbeat();
     } catch (e) {
       _setState(DeviceConnectionState.failed);
       rethrow;
     }
   }
 
-  /// Tear down connection and stop heartbeat.
+  /// Tear down connection.
   Future<void> disconnect() async {
-    _stopHeartbeat();
     await _connection.disconnect();
     _setState(DeviceConnectionState.disconnected);
   }
 
   /// Release all resources.
   Future<void> dispose() async {
-    _stopHeartbeat();
     await _statusSub?.cancel();
     await _messageSub?.cancel();
-    for (final sub in _fieldSubscriptions.values) {
-      await sub.close();
-    }
-    _fieldSubscriptions.clear();
     await _connectionStateSubject.close();
   }
 
-  // ── Heartbeat ──
-
-  void _startHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      if (_connection.status == ConnectionStatus.connected) return;
-      // Connection degraded — attempt recovery
-      _setState(DeviceConnectionState.degraded);
-      try {
-        await _connection.connect();
-        _setState(DeviceConnectionState.connected);
-      } catch (_) {
-        _setState(DeviceConnectionState.reconnecting);
-      }
-    });
-  }
-
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-  }
-
-  // ── Connection listener ──
+  // ══════════════════════════════════════════════════════════════
+  // Connection listener
+  // ══════════════════════════════════════════════════════════════
 
   void _listenToConnection() {
     _statusSub = _connection.statusStream.listen((status) {
@@ -156,42 +149,23 @@ class DeviceImpl implements IDeviceFacade {
     });
 
     _messageSub = _connection.messageStream.listen((msg) {
-      _dispatchMessage(msg);
+      _onMqttMessage(msg);
     });
   }
 
-  void _dispatchMessage(DeviceMessage msg) {
-    final payload = msg.payload;
-
-    // Dispatch to field-level subscriptions by prefix matching
-    for (final entry in _fieldSubscriptions.entries) {
-      final fieldPath = entry.key;
-      final value = _extractNested(payload, fieldPath);
-      if (value != null) {
-        entry.value.add(value);
-      }
-    }
-  }
-
-  /// Extract a nested value from a JSON map by dotted path.
-  /// E.g., `_extractNested({'temp': {'nozzle': 200}}, 'temp.nozzle')` → 200
-  dynamic _extractNested(Map<String, dynamic> map, String path) {
-    final parts = path.split('.');
-    dynamic current = map;
-    for (final part in parts) {
-      if (current is Map<String, dynamic>) {
-        current = current[part];
-      } else {
-        return null;
-      }
-    }
-    return current;
+  /// ✅ MQTT 消息 → 通过 Notifier 写入 Store
+  void _onMqttMessage(DeviceMessage msg) {
+    // 通过 Notifier 写入，Notifier 会更新 state，触发 Riverpod 通知
+    _notifier.onMqttStatusUpdate(info.sn, msg.payload);
   }
 
   void _setState(DeviceConnectionState newState) {
     if (_connectionState == newState) return;
     _connectionState = newState;
     _connectionStateSubject.add(newState);
+
+    // ✅ 连接状态变化 → 通过 Notifier 通知（触发 staleness + 快照）
+    _notifier.onConnectionStateChanged(info.sn, newState);
   }
 
   DeviceConnectionState _mapConnectionStatus(ConnectionStatus status) {
