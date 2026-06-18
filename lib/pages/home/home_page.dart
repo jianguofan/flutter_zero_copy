@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_zero_copy/pages/devices/my_devices_page.dart';
 import 'package:flutter_zero_copy/pages/home/widgets/home_side_menu.dart';
 import 'package:flutter_zero_copy/pages/projects/projects_page.dart';
+import 'package:flutter_zero_copy/pages/renderer/renderer_page.dart';
 import 'package:flutter_zero_copy/shared/debug/store_debug_button.dart';
 
 /// 首页
@@ -82,6 +83,9 @@ class _HomePageState extends State<HomePage> {
 
                       // 近期文件页面
                       _buildPlaceholderPage(context, '近期文件'),
+
+                      // 3D 渲染页面
+                      const RendererPage(),
                     ],
                   ),
                 ),

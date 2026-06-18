@@ -214,8 +214,16 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.1.2"
-  crypto:
+  cross_file:
     dependency: transitive
+    description:
+      name: cross_file
+      sha256: "7caf6a750a0c04effbb52a676dce9a4a592e10ad35c34d6d2d0e4811160d5670"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.3.4+2"
+  crypto:
+    dependency: "direct main"
     description:
       name: crypto
       sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
@@ -318,6 +326,46 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "7.0.0"
+  file_selector:
+    dependency: "direct main"
+    description:
+      name: file_selector
+      sha256: "312829854cd7af4456f9f52fc3c6cf9573a3238fa8264a4e802b175cac642fd5"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.8.3"
+  file_selector_macos:
+    dependency: "direct main"
+    description:
+      name: file_selector_macos
+      sha256: "271ab9986df0c135d45c3cdb6bd0faa5db6f4976d3e4b437cf7d0f258d941bfc"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.9.4+2"
+  file_selector_platform_interface:
+    dependency: transitive
+    description:
+      name: file_selector_platform_interface
+      sha256: a3994c26f10378a039faa11de174d7b78eb8f79e4dd0af2a451410c1a5c3f66b
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "2.6.2"
+  file_selector_web:
+    dependency: transitive
+    description:
+      name: file_selector_web
+      sha256: bf166d08f4c3f79286774cdfa39ed301e076c5a903c435f5199818288f24a66d
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.8.1+5"
+  file_selector_windows:
+    dependency: transitive
+    description:
+      name: file_selector_windows
+      sha256: "8bbcc82fe0d3cdf5ae5c289492ddfd703ec028028d9f194dbceae04cfbde1c48"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.8.2+2"
   fixnum:
     dependency: transitive
     description:

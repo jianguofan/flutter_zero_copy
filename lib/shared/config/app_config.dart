@@ -52,11 +52,20 @@ class AppConfig {
     enableDebugLogging: true,
   );
 
-  /// Production configuration.
+  /// Production configuration (US).
   static const prod = AppConfig(
     environment: AppEnvironment.prod,
-    apiBaseUrl: 'https://api.snapmaker.com/api',
+    apiBaseUrl: 'https://id.snapmaker.com/api',
     mqttBrokerHost: 'mqtt.snapmaker.com',
+    mqttBrokerPort: 8883,
+    enableSsl: true,
+  );
+
+  /// Production configuration (CN).
+  static const prodCN = AppConfig(
+    environment: AppEnvironment.prod,
+    apiBaseUrl: 'https://api.snapmaker.cn/api',
+    mqttBrokerHost: 'mqtt.snapmaker.cn',
     mqttBrokerPort: 8883,
     enableSsl: true,
   );

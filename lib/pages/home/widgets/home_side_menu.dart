@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_zero_copy/pages/auth/login_dialog.dart';
 import 'package:flutter_zero_copy/state/user_state.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// 首页侧边栏组件
 ///
@@ -57,6 +57,12 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
                   index: 2,
                   icon: Icons.folder_open,
                   label: '近期文件',
+                ),
+                _buildMenuItem(
+                  context,
+                  index: 3,
+                  icon: Icons.view_in_ar,
+                  label: '3D 渲染',
                 ),
               ],
             ),

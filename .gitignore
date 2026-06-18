@@ -16,6 +16,9 @@ macos/Flutter/ephemeral/
 # C++ build artifacts
 cube_renderer/build/
 
+# Prebuilt engine binary (distributed via releases, not git)
+slicer-render-engine/
+
 # IDE
 .idea/
 

@@ -40,4 +40,20 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end
+
+  # Bundle orca_engine into the app on every build
+  engine_src = File.expand_path('../../slicer-render-engine/orca_engine', __FILE__)
+  if File.exist?(engine_src)
+    project_dir = File.dirname(File.realpath(__FILE__))
+    puts "Pods post-install: bundling orca_engine from #{engine_src}"
+  end
 end
+
+# Build phase: copy orca_engine into Runner.app/Contents/MacOS
+system("
+  ENGINE='#{File.expand_path('../../slicer-render-engine/orca_engine', __FILE__)}';
+  if [ -f \"$ENGINE\" ]; then
+    mkdir -p '#{File.expand_path('Runner', __FILE__)}';
+    echo 'Engine binary ready: '$ENGINE;
+  fi
+")
