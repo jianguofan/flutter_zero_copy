@@ -164,10 +164,16 @@ class EngineClient {
   }
 
   void _flushSlot(_InputSlot slot) {
-    if (slot.inFlight) return;
+    if (slot.inFlight) {
+      // ignore: avoid_print
+      print('[EngineClient] ${slot.op} slot BLOCKED (inFlight)');
+      return;
+    }
     final p = slot.takePending();
     if (p == null) return;
     slot.inFlight = true;
+    // ignore: avoid_print
+    print('[EngineClient] → SEND ${slot.op}: $p');
     _sendJson(p);
   }
 
@@ -250,15 +256,31 @@ class EngineClient {
     // Input slot response (no id, matched by op_replied)
     final replied = m['op_replied'] as String?;
     if (replied == null && (m['op'] == 'render_stats' || m.containsKey('render_us'))) {
-      // Backward-compat: old engines may reply with render_stats
-      final slot = _orbitSlot;
-      if (slot != null) _onSlotResponse(slot);
+      // Backward-compat: engine replies with render_stats instead of explicit
+      // input acks.  Free ALL input slots — not just orbit — so pan and zoom
+      // don't deadlock after the first frame.
+      for (final slot in [_orbitSlot, _panSlot, _zoomSlot]) {
+        if (slot != null) _onSlotResponse(slot);
+      }
       return;
     }
     if (replied != null) {
       final slot = _slotFor(replied);
-      if (slot != null) _onSlotResponse(slot);
+      if (slot != null) {
+        // ignore: avoid_print
+        print('[EngineClient] ← ${replied} ack render_us=${m['render_us']} drops=${m['drops']}');
+        _onSlotResponse(slot);
+      }
+      // Notify engine that the frame was consumed, freeing the IOSurface slot
+      // for the next render. Without this, the engine's triple-buffer slots
+      // fill up after 3 renders and all subsequent render_one() calls return
+      // render_us=0 (no-op).
+      _sendJson({'op': 'frame_consumed', 'idx': 0});
+      return;
     }
+    // Catch-all: log any message we don't explicitly handle
+    // ignore: avoid_print
+    print('[EngineClient] ← unhandled: ${m['op'] ?? m.toString()}');
   }
 
   static String _uuid4() {

@@ -65,53 +65,67 @@ class ZeroCopyTexturePlugin: NSObject, FlutterPlugin, FlutterTexture {
         disposeSurface()
 
         let bytesPerPixel = 4
-        let bytesPerRow = width * bytesPerPixel
 
-        let props: [String: Any] = [
-            kIOSurfaceWidth as String: width,
-            kIOSurfaceHeight as String: height,
-            kIOSurfaceBytesPerElement as String: bytesPerPixel,
-            kIOSurfaceBytesPerRow as String: bytesPerRow,
-            kIOSurfacePixelFormat as String: kCVPixelFormatType_32BGRA,
-            kIOSurfaceIsGlobal as String: true,
+        // Use CVPixelBufferCreate to create both the IOSurface backing and the
+        // Metal-compatible pixel buffer in one call.  CoreVideo internally
+        // configures the IOSurface with proper alignment and properties so that
+        // Metal (used by Flutter's texture widget) can create textures from it.
+        //
+        // kIOSurfaceIsGlobal is included so the engine process can look up the
+        // surface by ID via IOSurfaceLookup.
+        var cvPixelBufferOut: CVPixelBuffer?
+        let attrs: [String: Any] = [
+            kCVPixelBufferIOSurfacePropertiesKey as String: [
+                kIOSurfacePixelFormat as String: kCVPixelFormatType_32BGRA,
+                kIOSurfaceIsGlobal as String: true,
+            ] as [String: Any],
+            kCVPixelBufferMetalCompatibilityKey as String: true,
         ]
 
-        guard let surface = IOSurfaceCreate(props as CFDictionary) else {
-            NSLog("[ZeroCopyPlugin] IOSurfaceCreate failed")
-            return nil
-        }
-        surfaceRef = surface
-
-        let surfaceID = IOSurfaceGetID(surface)
-        currentSurfaceID = surfaceID
-        NSLog("[ZeroCopyPlugin] Created IOSurface: id=%u, %dx%d", surfaceID, width, height)
-
-        // Fill with a bright test color so we can verify texture display immediately
-        IOSurfaceLock(surface, [], nil)
-        let base = IOSurfaceGetBaseAddress(surface)
-        let totalPixels = width * height
-        let ptr = base.bindMemory(to: UInt32.self, capacity: totalPixels)
-        for i in 0..<totalPixels {
-            ptr[i] = 0xFF00FFFF  // BGRA magenta
-        }
-        IOSurfaceUnlock(surface, [], nil)
-        NSLog("[ZeroCopyPlugin] Filled IOSurface with test color (magenta)")
-
-        // Create CVPixelBuffer backed by IOSurface (zero-copy)
-        var cvPixelBufferOut: Unmanaged<CVPixelBuffer>?
-        let cvRet = CVPixelBufferCreateWithIOSurface(
+        let cvRet = CVPixelBufferCreate(
             kCFAllocatorDefault,
-            surface,
-            nil,
+            width,
+            height,
+            kCVPixelFormatType_32BGRA,
+            attrs as CFDictionary,
             &cvPixelBufferOut
         )
 
         guard cvRet == kCVReturnSuccess, let cvOut = cvPixelBufferOut else {
-            NSLog("[ZeroCopyPlugin] CVPixelBufferCreateWithIOSurface failed: %d", cvRet)
+            NSLog("[ZeroCopyPlugin] CVPixelBufferCreate failed: %d (w=%d, h=%d)", cvRet, width, height)
             return nil
         }
-        pixelBuffer = cvOut.takeRetainedValue()
-        NSLog("[ZeroCopyPlugin] CVPixelBuffer created: %dx%d", width, height)
+        pixelBuffer = cvOut
+
+        // Extract the underlying IOSurface from the pixel buffer (zero-copy —
+        // the pixel buffer retains it, we just hold an unretained reference).
+        guard let surface = CVPixelBufferGetIOSurface(pixelBuffer!) else {
+            NSLog("[ZeroCopyPlugin] CVPixelBufferGetIOSurface returned nil")
+            pixelBuffer = nil
+            return nil
+        }
+        surfaceRef = surface.takeUnretainedValue()
+
+        let surfaceID = IOSurfaceGetID(surfaceRef!)
+        currentSurfaceID = surfaceID
+        let actualBPR = IOSurfaceGetBytesPerRow(surfaceRef!)
+        NSLog("[ZeroCopyPlugin] Created Metal-compatible IOSurface: id=%u, %dx%d, bpr=%d", surfaceID, width, height, actualBPR)
+
+        // Fill with a bright test color so we can verify texture display immediately
+        IOSurfaceLock(surfaceRef!, [], nil)
+        let base = IOSurfaceGetBaseAddress(surfaceRef!)
+        // Use actual bytes-per-row for row addressing (may be > width*4 due to alignment)
+        let actualBPR32 = actualBPR / bytesPerPixel
+        let ptr = base.bindMemory(to: UInt32.self, capacity: actualBPR32 * height)
+        // Fill row by row to respect stride
+        for row in 0..<height {
+            let rowStart = row * actualBPR32
+            for col in 0..<width {
+                ptr[rowStart + col] = 0xFF00FFFF  // BGRA magenta
+            }
+        }
+        IOSurfaceUnlock(surfaceRef!, [], nil)
+        NSLog("[ZeroCopyPlugin] Filled IOSurface with test color (magenta)")
 
         // Register with Flutter TextureRegistry
         textureId = textureRegistry!.register(self)

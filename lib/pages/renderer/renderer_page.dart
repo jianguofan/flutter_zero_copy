@@ -141,6 +141,13 @@ class _RendererPageState extends State<RendererPage> {
     try {
       final resp = await _engine!.request('project_open', {'path': path});
       debugPrint('[RendererPage] project_open: $resp');
+
+      // After loading a project, fit the scene to properly initialize the
+      // camera eye/target positions. Without this, render_orbit() sees a
+      // near-zero eye→target vector and orbit produces no visible rotation.
+      await _engine!.request('scene_fit');
+      debugPrint('[RendererPage] scene_fit done');
+
       if (mounted) {
         setState(() {}); // 刷新 UI 显示文件名
       }
@@ -219,7 +226,11 @@ class _RendererPageState extends State<RendererPage> {
   // ── Engine RPC commands ──
 
   void _orbit(double dx, double dy) {
-    if (_engine == null || !_engineReady) return;
+    if (_engine == null || !_engineReady) {
+      debugPrint('[Gesture] _orbit blocked: engine=${_engine != null} ready=$_engineReady');
+      return;
+    }
+    debugPrint('[Gesture] → orbit dx=${dx.toStringAsFixed(1)} dy=${dy.toStringAsFixed(1)}');
     _engine!.sendInput('input_orbit', {
       'dx': dx,
       'dy': dy,
@@ -228,7 +239,11 @@ class _RendererPageState extends State<RendererPage> {
   }
 
   void _zoom(double factor, double anchorX, double anchorY) {
-    if (_engine == null || !_engineReady) return;
+    if (_engine == null || !_engineReady) {
+      debugPrint('[Gesture] _zoom blocked: engine=${_engine != null} ready=$_engineReady');
+      return;
+    }
+    debugPrint('[Gesture] → zoom factor=${factor.toStringAsFixed(2)}');
     _engine!.sendInput('input_zoom', {
       'factor': factor,
       'anchor_x': anchorX,
@@ -238,7 +253,11 @@ class _RendererPageState extends State<RendererPage> {
   }
 
   void _pan(double dx, double dy) {
-    if (_engine == null || !_engineReady) return;
+    if (_engine == null || !_engineReady) {
+      debugPrint('[Gesture] _pan blocked: engine=${_engine != null} ready=$_engineReady');
+      return;
+    }
+    debugPrint('[Gesture] → pan dx=${dx.toStringAsFixed(1)} dy=${dy.toStringAsFixed(1)}');
     _engine!.sendInput('input_pan', {
       'dx': dx,
       'dy': dy,
@@ -253,8 +272,6 @@ class _RendererPageState extends State<RendererPage> {
 
   // ── Pointer events ──
 
-  int _navigationButtons = 0;
-
   bool _isPanButton(int buttons) {
     return (buttons & kSecondaryMouseButton) != 0 ||
         (buttons & kMiddleMouseButton) != 0 ||
@@ -265,15 +282,14 @@ class _RendererPageState extends State<RendererPage> {
   }
 
   void _onPointerDown(PointerDownEvent e) {
-    _navigationButtons = e.buttons;
+    debugPrint('[Gesture] down buttons=${e.buttons} pos=(${e.localPosition.dx.toStringAsFixed(0)},${e.localPosition.dy.toStringAsFixed(0)})');
   }
 
   void _onPointerMove(PointerMoveEvent e) {
-    if (e.buttons == 0 || _inScaleGesture) return;
-    _navigationButtons = e.buttons;
-    _draggedDuringPointer = true;
+    if (e.buttons == 0) return;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final nativeDelta = e.delta * dpr;
+    debugPrint('[Gesture] move buttons=${e.buttons} delta=(${nativeDelta.dx.toStringAsFixed(1)},${nativeDelta.dy.toStringAsFixed(1)}) pan=${_isPanButton(e.buttons)}');
     if (_isPanButton(e.buttons)) {
       _pan(nativeDelta.dx, nativeDelta.dy);
     } else {
@@ -282,11 +298,11 @@ class _RendererPageState extends State<RendererPage> {
   }
 
   void _onPointerUp(PointerUpEvent e) {
-    _navigationButtons = 0;
+    // no-op
   }
 
   void _onPointerCancel(PointerCancelEvent e) {
-    _navigationButtons = 0;
+    // no-op
   }
 
   void _onScroll(PointerSignalEvent e) {
@@ -294,43 +310,6 @@ class _RendererPageState extends State<RendererPage> {
       final factor = e.scrollDelta.dy < 0 ? 1.1 : 0.9;
       _zoom(factor, e.localPosition.dx, e.localPosition.dy);
     }
-  }
-
-  // ── GestureDetector callbacks (trackpad pinch-to-zoom, pan) ──
-
-  double _scaleStart = 1.0;
-  bool _inScaleGesture = false;
-
-  void _onScaleStart(ScaleStartDetails details) {
-    _scaleStart = 1.0;
-    _inScaleGesture = true;
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails details) {
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-
-    // Pinch-to-zoom via scale factor
-    if (details.scale != 1.0) {
-      final factor = details.scale / _scaleStart;
-      _scaleStart = details.scale;
-      final anchor = details.localFocalPoint;
-      _zoom(factor, anchor.dx, anchor.dy);
-    }
-
-    // Two-finger pan (orbit if not shift, pan if shift)
-    final nativeDelta = details.focalPointDelta * dpr;
-    if (nativeDelta.dx.abs() > 0 || nativeDelta.dy.abs() > 0) {
-      if (_isPanButton(_navigationButtons)) {
-        _pan(nativeDelta.dx, nativeDelta.dy);
-      } else {
-        _orbit(nativeDelta.dx, nativeDelta.dy);
-      }
-    }
-  }
-
-  void _onScaleEnd(ScaleEndDetails details) {
-    _scaleStart = 1.0;
-    _inScaleGesture = false;
   }
 
   // ── Build ──
@@ -413,24 +392,17 @@ class _RendererPageState extends State<RendererPage> {
       children: [
         // 3D 纹理 — 全屏
         Positioned.fill(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: _onPointerDown,
-                onPointerMove: _onPointerMove,
-                onPointerUp: _onPointerUp,
-                onPointerCancel: _onPointerCancel,
-                onPointerSignal: _onScroll,
-                child: GestureDetector(
-                  onDoubleTap: _sceneFit,
-                  onScaleStart: _onScaleStart,
-                  onScaleUpdate: _onScaleUpdate,
-                  onScaleEnd: _onScaleEnd,
-                  child: Texture(textureId: _textureId!),
-                ),
-              );
-            },
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: _onPointerDown,
+            onPointerMove: _onPointerMove,
+            onPointerUp: _onPointerUp,
+            onPointerCancel: _onPointerCancel,
+            onPointerSignal: _onScroll,
+            child: GestureDetector(
+              onDoubleTap: _sceneFit,
+              child: Texture(textureId: _textureId!),
+            ),
           ),
         ),
 

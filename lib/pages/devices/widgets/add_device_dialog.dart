@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_zero_copy/pages/auth/login_dialog.dart';
 import 'package:flutter_zero_copy/services/device_discovery_service.dart';
+import 'package:flutter_zero_copy/services/wan_api_service.dart';
+import 'package:flutter_zero_copy/state/user_state.dart';
 import 'package:lava_device_sdk/lava_device_sdk.dart';
 
 /// 添加设备对话框
@@ -8,10 +12,12 @@ import 'package:lava_device_sdk/lava_device_sdk.dart';
 /// 支持PIN码绑定和IP码搜索两种模式
 class AddDeviceDialog extends StatefulWidget {
   final Function(dynamic)? onDeviceAdded;
+  final WanApiService? wanApiService;
 
   const AddDeviceDialog({
     super.key,
     this.onDeviceAdded,
+    this.wanApiService,
   });
 
   @override
@@ -150,7 +156,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               TextField(
                 controller: _pinController,
                 decoration: InputDecoration(
-                  hintText: '请输入6位PIN码',
+                  hintText: '请输入8位PIN码',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -158,24 +164,25 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 keyboardType: TextInputType.number,
-                maxLength: 6,
+                maxLength: 8,
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 40,
                 child: ElevatedButton(
-                  onPressed: () {
-                    final pin = _pinController.text.trim();
-                    if (pin.length == 6) {
-                      Navigator.of(context).pop();
-                      debugPrint('连接设备 PIN: $pin');
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('请输入6位PIN码')),
-                      );
-                    }
-                  },
+                  onPressed: _isConnecting
+                      ? null
+                      : () {
+                          final pin = _pinController.text.trim();
+                          if (pin.length == 8) {
+                            _connectWan(pin);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('请输入8位PIN码')),
+                            );
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,
                     shape: RoundedRectangleBorder(
@@ -684,6 +691,122 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
       setState(() {
         _isConnecting = false;
       });
+    }
+  }
+
+  /// WAN/PIN 模式连接
+  Future<void> _connectWan(String pinCode) async {
+    final api = widget.wanApiService;
+
+    // 没有 API 服务 → 简化为直接返回 PIN
+    if (api == null) {
+      debugPrint('WAN: WanApiService 未注入，使用简化模式');
+      if (mounted) {
+        Navigator.of(context).pop({
+          'success': true,
+          'pinCode': pinCode,
+          'connectionType': 'wan',
+        });
+      }
+      return;
+    }
+
+    // 检查登录状态
+    if (!mounted) return;
+    final container = ProviderScope.containerOf(context);
+    var userState = container.read(userStateProvider);
+    if (!userState.isLoggedIn) {
+      // 未登录 → 弹出登录对话框
+      await showDialog(context: context, builder: (_) => const LoginDialog());
+      if (!mounted) return;
+      // 登录后重新检查状态
+      userState = container.read(userStateProvider);
+      if (!userState.isLoggedIn) return; // 用户取消登录
+    }
+
+    // 同步 token 到 WanApiService（LoginDialog 只更新 userState，这里补设 token）
+    if (!api.isLoggedIn) {
+      api.setToken('wan-token-${userState.username ?? "user"}');
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _connectionProgress = '正在绑定设备...';
+    });
+
+    // 显示进度对话框
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _buildConnectionProgressDialog(),
+      );
+    }
+
+    try {
+      debugPrint('════════════ WAN 连接开始 ════════════');
+      debugPrint('PIN Code: $pinCode');
+      debugPrint('API Base URL: ${api.baseUrl}');
+      debugPrint('Token: ${api.token}');
+      debugPrint('Is Logged In: ${api.isLoggedIn}');
+      debugPrint('User State: ${userState.username}, loggedIn=${userState.isLoggedIn}');
+      debugPrint('──────────────────────────────────────');
+      final result = await DeviceHub.connectWan(
+        api: api,
+        token: api.token,
+        pinCode: pinCode,
+        nickname: 'MyPrinter',
+      );
+
+      if (result != null) {
+        debugPrint('WAN: 连接成功, sn=${result.credentials.sn}');
+
+        _credentials = {
+          'sn': result.credentials.sn,
+          'ca': result.credentials.ca,
+          'cert': result.credentials.cert,
+          'key': result.credentials.key,
+          'port': result.credentials.port,
+        };
+
+        if (mounted) {
+          Navigator.of(context).pop(); // 关闭进度对话框
+          Navigator.of(context).pop({
+            'success': true,
+            'device': DiscoveredDevice(
+              name: 'Printer (${result.credentials.sn})',
+              ip: result.credentials.host,
+              mode: 'WAN',
+            ),
+            'client': result.client,
+            'credentials': _credentials,
+          });
+        }
+      } else {
+        debugPrint('WAN: 连接失败');
+        if (mounted) {
+          Navigator.of(context).pop(); // 关闭进度对话框
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WAN 连接失败'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('WAN: 连接异常 $e\n$stack');
+      if (mounted) {
+        Navigator.of(context).pop(); // 关闭进度对话框
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('连接异常: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isConnecting = false);
     }
   }
 

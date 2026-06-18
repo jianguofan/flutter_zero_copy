@@ -5,6 +5,8 @@ import 'package:flutter_zero_copy/features/device/application/providers/device_l
 import 'package:flutter_zero_copy/features/device/application/providers/device_session_provider.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_metadata_store_provider.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
+import 'package:flutter_zero_copy/services/wan_api_service.dart';
+import 'package:flutter_zero_copy/shared/di/providers.dart';
 
 /// 我的设备页面
 ///
@@ -17,6 +19,7 @@ class MyDevicesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final devices = ref.watch(deviceListProvider);
+    final wanApiService = ref.watch(wanApiServiceProvider);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -59,7 +62,7 @@ class MyDevicesPage extends ConsumerWidget {
 
             // 设备网格
             Expanded(
-              child: _buildDeviceGrid(context, ref, devices),
+              child: _buildDeviceGrid(context, ref, devices, wanApiService),
             ),
           ],
         ),
@@ -72,10 +75,11 @@ class MyDevicesPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     List devices,
+    WanApiService wanApiService,
   ) {
     // 如果没有设备，显示空状态
     if (devices.isEmpty) {
-      return _buildEmptyState(context, ref);
+      return _buildEmptyState(context, ref, wanApiService);
     }
 
     return GridView.builder(
@@ -95,6 +99,7 @@ class MyDevicesPage extends ConsumerWidget {
         } else {
           return AddDeviceCard(
             onDeviceAdded: (deviceInfo) => _handleDeviceAdded(ref, deviceInfo),
+            wanApiService: wanApiService,
           );
         }
       },
@@ -102,7 +107,7 @@ class MyDevicesPage extends ConsumerWidget {
   }
 
   /// 空状态
-  Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref, WanApiService wanApiService) {
     final theme = Theme.of(context);
     return Center(
       child: Column(
@@ -130,6 +135,7 @@ class MyDevicesPage extends ConsumerWidget {
           const SizedBox(height: 24),
           AddDeviceCard(
             onDeviceAdded: (deviceInfo) => _handleDeviceAdded(ref, deviceInfo),
+            wanApiService: wanApiService,
           ),
         ],
       ),
@@ -149,6 +155,17 @@ class MyDevicesPage extends ConsumerWidget {
       return;
     }
 
+    final connectionType = deviceInfo['connectionType'] as String? ?? 'lan';
+
+    if (connectionType == 'wan') {
+      await _handleWanDeviceAdded(ref, deviceInfo);
+    } else {
+      await _handleLanDeviceAdded(ref, deviceInfo);
+    }
+  }
+
+  /// 处理 LAN 模式设备添加
+  Future<void> _handleLanDeviceAdded(WidgetRef ref, Map<String, dynamic> deviceInfo) async {
     final device = deviceInfo['device'];
     final credentials = deviceInfo['credentials'] as Map<String, dynamic>?;
 
@@ -158,10 +175,8 @@ class MyDevicesPage extends ConsumerWidget {
     }
 
     final sn = credentials?['sn'] as String? ?? 'LAN-${device.ip}';
-    final deviceId = sn;
-
     final info = DeviceInfo(
-      id: deviceId,
+      id: sn,
       name: device.name ?? 'Unknown Device',
       sn: sn,
       networkType: NetworkType.lan,
@@ -169,12 +184,37 @@ class MyDevicesPage extends ConsumerWidget {
       createdAt: DateTime.now(),
     );
 
-    // 持久化
+    await _registerDevice(ref, info);
+  }
+
+  /// 处理 WAN/PIN 模式设备添加
+  Future<void> _handleWanDeviceAdded(WidgetRef ref, Map<String, dynamic> deviceInfo) async {
+    final pinCode = deviceInfo['pinCode'] as String?;
+    if (pinCode == null) {
+      debugPrint('PIN 码为空');
+      return;
+    }
+
+    // WAN 模式暂时用 PIN 码作为标识，等 CloudApiClient 就绪后改为真实 SN
+    final sn = 'WAN-$pinCode';
+    final info = DeviceInfo(
+      id: sn,
+      name: 'Printer ($pinCode)',
+      sn: sn,
+      networkType: NetworkType.wan,
+      pinCode: pinCode,
+      createdAt: DateTime.now(),
+    );
+
+    await _registerDevice(ref, info);
+  }
+
+  /// 注册设备到 Registry 和 Store
+  Future<void> _registerDevice(WidgetRef ref, DeviceInfo info) async {
     final registry = ref.read(deviceRegistryProvider);
     await registry.register(info);
     debugPrint('📝 Registry 注册完成: ${info.name}, 当前 registry 设备数: ${registry.devices.length}');
 
-    // 更新响应式状态
     final notifier = ref.read(deviceMetadataStoreProvider.notifier);
     notifier.onDeviceRegistered(info);
     debugPrint('📝 Store 更新完成: ${info.name}, 当前 store 设备数: ${notifier.allDevices.length}');
@@ -275,10 +315,12 @@ class DeviceCard extends StatelessWidget {
 /// 添加设备卡片
 class AddDeviceCard extends StatelessWidget {
   final Function(dynamic) onDeviceAdded;
+  final WanApiService? wanApiService;
 
   const AddDeviceCard({
     super.key,
     required this.onDeviceAdded,
+    this.wanApiService,
   });
 
   @override
@@ -293,6 +335,7 @@ class AddDeviceCard extends StatelessWidget {
             context: context,
             builder: (context) => AddDeviceDialog(
               onDeviceAdded: onDeviceAdded,
+              wanApiService: wanApiService,
             ),
           );
           if (result != null && result['success'] == true) {
