@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_zero_copy/pages/devices/my_devices_page.dart';
+
 import 'package:flutter_zero_copy/pages/home/widgets/home_side_menu.dart';
 import 'package:flutter_zero_copy/pages/projects/projects_page.dart';
-import 'package:flutter_zero_copy/pages/renderer/renderer_page.dart';
-import 'package:flutter_zero_copy/shared/debug/store_debug_button.dart';
+import 'package:flutter_zero_copy/pages/devices/my_devices_page.dart';
+import 'package:flutter_zero_copy/pages/recent/recent_files_page.dart';
 
-/// 首页
+/// 首页 — visible under the "首页" top tab.
 ///
-/// 包含左侧边栏和主内容区（默认显示模型库/项目网格）
+/// Contains a left sidebar (模型库 / 我的设备 / 近期文件) and a content area
+/// that switches between sub-pages via an internal [PageView].
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -26,9 +27,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onMenuItemChanged(int index) {
-    setState(() {
-      _selectedMenuIndex = index;
-    });
+    setState(() => _selectedMenuIndex = index);
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 300),
@@ -42,50 +41,38 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surfaceContainer,
-      body: Stack(
+      body: Row(
         children: [
-          Row(
-        children: [
-          // 左侧边栏
+          // Left sidebar
           HomeSideMenu(
+            selectedIndex: _selectedMenuIndex,
             onMenuItemChanged: _onMenuItemChanged,
           ),
 
-          // 分割线
+          // Divider
           VerticalDivider(
             width: 1,
             thickness: 1,
             color: theme.dividerColor,
           ),
 
-          // 主内容区
+          // Content area
           Expanded(
             child: Column(
               children: [
-                // 顶部操作按钮区
+                // Top action bar
                 _buildTopActionBar(context),
-
-                // 内容区
+                // Sub-pages
                 Expanded(
                   child: PageView(
                     controller: _pageController,
                     onPageChanged: (index) {
-                      setState(() {
-                        _selectedMenuIndex = index;
-                      });
+                      setState(() => _selectedMenuIndex = index);
                     },
-                    children: [
-                      // 模型库页面（显示项目网格）
-                      const ProjectsPage(),
-
-                      // 我的设备页面
-                      const MyDevicesPage(),
-
-                      // 近期文件页面
-                      _buildPlaceholderPage(context, '近期文件'),
-
-                      // 3D 渲染页面
-                      const RendererPage(),
+                    children: const [
+                      ProjectsPage(),
+                      MyDevicesPage(),
+                      RecentFilesPage(),
                     ],
                   ),
                 ),
@@ -94,14 +81,9 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      // 全局调试按钮
-      const StoreDebugButton(),
-    ],
-      ),
     );
   }
 
-  /// 顶部操作栏
   Widget _buildTopActionBar(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -111,76 +93,31 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor,
-            width: 1,
-          ),
+          bottom: BorderSide(color: theme.dividerColor, width: 1),
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // 打开项目按钮
           OutlinedButton(
-            onPressed: () {
-              debugPrint('打开项目');
-            },
+            onPressed: () => debugPrint('打开项目'),
             style: OutlinedButton.styleFrom(
               side: BorderSide(color: theme.colorScheme.primary),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
-            child: Text(
-              '打开项目',
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.primary,
-              ),
-            ),
+            child: Text('打开项目',
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.primary)),
           ),
-
           const SizedBox(width: 16),
-
-          // 创建项目按钮
           ElevatedButton.icon(
-            onPressed: () {
-              debugPrint('创建项目');
-            },
+            onPressed: () => debugPrint('创建项目'),
             icon: const Icon(Icons.add, size: 16),
-            label: const Text(
-              '创建项目',
-              style: TextStyle(fontSize: 12),
-            ),
+            label: const Text('创建项目', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 占位页面
-  Widget _buildPlaceholderPage(BuildContext context, String title) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.inbox,
-            size: 64,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurfaceVariant
-                .withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
           ),
         ],
       ),

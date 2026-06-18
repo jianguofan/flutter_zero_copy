@@ -1,70 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:flutter_zero_copy/pages/auth/login_dialog.dart';
 import 'package:flutter_zero_copy/state/user_state.dart';
 
-/// 首页侧边栏组件
+/// Menu items shown in the left sidebar.
+const _menuItems = [
+  (Icons.view_in_ar, '模型库'),
+  (Icons.devices, '我的设备'),
+  (Icons.folder_open, '近期文件'),
+];
+
+/// Left sidebar for the Home page.
 ///
-/// 包含用户信息、模型库、我的设备、近期文件等菜单
-class HomeSideMenu extends ConsumerStatefulWidget {
-  final Function(int)? onMenuItemChanged;
+/// Provides sub-navigation within the "首页" tab: 模型库, 我的设备, 近期文件.
+/// Selection state is managed by the parent [HomePage] via [selectedIndex]
+/// and [onMenuItemChanged].
+class HomeSideMenu extends ConsumerWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onMenuItemChanged;
 
   const HomeSideMenu({
     super.key,
-    this.onMenuItemChanged,
+    required this.selectedIndex,
+    required this.onMenuItemChanged,
   });
 
   @override
-  ConsumerState<HomeSideMenu> createState() => _HomeSideMenuState();
-}
-
-class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
-  int _selectedIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final userState = ref.watch(userStateProvider);
 
     return Container(
       width: 262,
       color: theme.colorScheme.surfaceContainer,
       child: Column(
         children: [
-          // 用户信息区域
-          _buildUserSection(context),
+          // User info section
+          _buildUserSection(context, ref, theme, userState),
 
           const SizedBox(height: 16),
 
-          // 菜单项
+          // Menu items
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
-              children: [
-                _buildMenuItem(
+              children: List.generate(_menuItems.length, (i) {
+                final (icon, label) = _menuItems[i];
+                return _buildMenuItem(
                   context,
-                  index: 0,
-                  icon: Icons.view_in_ar,
-                  label: '模型库',
-                ),
-                _buildMenuItem(
-                  context,
-                  index: 1,
-                  icon: Icons.devices,
-                  label: '我的设备',
-                ),
-                _buildMenuItem(
-                  context,
-                  index: 2,
-                  icon: Icons.folder_open,
-                  label: '近期文件',
-                ),
-                _buildMenuItem(
-                  context,
-                  index: 3,
-                  icon: Icons.view_in_ar,
-                  label: '3D 渲染',
-                ),
-              ],
+                  theme: theme,
+                  index: i,
+                  icon: icon,
+                  label: label,
+                  isSelected: i == selectedIndex,
+                );
+              }),
             ),
           ),
         ],
@@ -72,18 +63,15 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
     );
   }
 
-  /// 用户信息区域
-  Widget _buildUserSection(BuildContext context) {
-    final theme = Theme.of(context);
-    final userState = ref.watch(userStateProvider);
+  // ── User section ──────────────────────────────────────────────────
 
+  Widget _buildUserSection(
+      BuildContext context, WidgetRef ref, ThemeData theme, UserState userState) {
     return InkWell(
       onTap: () {
         if (userState.isLoggedIn) {
-          // 已登录，显示退出登录菜单
-          _showLogoutMenu(context);
+          _showLogoutMenu(context, ref, theme);
         } else {
-          // 未登录，显示登录对话框
           _showLoginDialog(context);
         }
       },
@@ -91,7 +79,6 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
         padding: const EdgeInsets.all(24),
         child: Row(
           children: [
-            // 用户头像
             CircleAvatar(
               radius: 20,
               backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
@@ -101,8 +88,6 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
               ),
             ),
             const SizedBox(width: 12),
-
-            // 用户名
             Expanded(
               child: Text(
                 userState.isLoggedIn
@@ -116,19 +101,13 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
                 ),
               ),
             ),
-
-            // 下拉箭头
-            Icon(
-              Icons.arrow_drop_down,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+            Icon(Icons.arrow_drop_down, color: theme.colorScheme.onSurfaceVariant),
           ],
         ),
       ),
     );
   }
 
-  /// 显示登录对话框
   void _showLoginDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -136,36 +115,23 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
     );
   }
 
-  /// 显示退出登录菜单
-  void _showLogoutMenu(BuildContext context) {
-    final theme = Theme.of(context);
-
+  void _showLogoutMenu(BuildContext context, WidgetRef ref, ThemeData theme) {
     showMenu(
       context: context,
       position: const RelativeRect.fromLTRB(0, 80, 0, 0),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       items: [
         PopupMenuItem(
           child: Row(
             children: [
-              Icon(
-                Icons.logout,
-                size: 20,
-                color: theme.colorScheme.error,
-              ),
+              Icon(Icons.logout, size: 20, color: theme.colorScheme.error),
               const SizedBox(width: 12),
-              Text(
-                '退出登录',
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
+              Text('退出登录', style: TextStyle(color: theme.colorScheme.error)),
             ],
           ),
           onTap: () {
-            // 延迟执行，避免菜单关闭动画冲突
             Future.delayed(const Duration(milliseconds: 100), () {
-              _confirmLogout(context);
+              _confirmLogout(context, ref);
             });
           },
         ),
@@ -173,8 +139,7 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
     );
   }
 
-  /// 确认退出登录
-  void _confirmLogout(BuildContext context) {
+  void _confirmLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -203,23 +168,18 @@ class _HomeSideMenuState extends ConsumerState<HomeSideMenu> {
     );
   }
 
-  /// 菜单项
+  // ── Menu item ─────────────────────────────────────────────────────
+
   Widget _buildMenuItem(
     BuildContext context, {
+    required ThemeData theme,
     required int index,
     required IconData icon,
     required String label,
+    required bool isSelected,
   }) {
-    final theme = Theme.of(context);
-    final isSelected = _selectedIndex == index;
-
     return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedIndex = index;
-        });
-        widget.onMenuItemChanged?.call(index);
-      },
+      onTap: () => onMenuItemChanged(index),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

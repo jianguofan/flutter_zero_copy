@@ -1,26 +1,90 @@
-// App-level route definitions using go_router.
-//
-// Routes:
-//   /                    → DeviceListPage (home)
-//   /device/:id          → DeviceDetailPage
-//   /device/discover     → DeviceDiscoveryPage
+/// App-level route definitions using go_router.
+///
+/// Shell:  MainFramePage (top tabs: 首页 / 预览 / 设备控制)
+///   /                → redirects to /home
+///   /home            → HomePage (sidebar: 模型库 / 我的设备 / 近期文件)
+///   /preview         → RendererPage (3D 渲染预览)
+///   /device-control  → DeviceControlFullPage
+///
+/// Outside shell:
+///   /device          → DeviceListPage
+///   /device/:id      → DeviceDetailPage
+///   /device/discover → DeviceDiscoveryPage
+library;
 
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:flutter_zero_copy/pages/main_frame_page.dart';
+import 'package:flutter_zero_copy/pages/home/home_page.dart';
+import 'package:flutter_zero_copy/pages/renderer/renderer_page.dart';
+import 'package:flutter_zero_copy/pages/device/device_control_full_page.dart';
+import 'package:flutter_zero_copy/pages/device/widgets/device_selector.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_list_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_detail_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_discovery_page.dart';
 
+/// Default mock devices for device-control page.
+const _defaultDevices = [
+  DeviceInfo(id: '1', name: 'Snapmaker J1', isConnected: false),
+  DeviceInfo(id: '2', name: 'Snapmaker A350', isConnected: true),
+  DeviceInfo(id: '3', name: 'Snapmaker 2.0', isConnected: false),
+];
+
 /// Top-level router configuration.
 final appRouter = GoRouter(
-  initialLocation: '/',
+  initialLocation: '/home',
   routes: [
+    // ── Main shell with persistent top tab bar ─────────────────────
+    ShellRoute(
+      builder: (context, state, child) => MainFramePage(
+        child: child,
+        currentLocation: state.uri.path,
+      ),
+      routes: [
+        // Redirect root to home
+        GoRoute(
+          path: '/',
+          redirect: (_, __) => '/home',
+        ),
+
+        // 首页 (sidebar: 模型库 / 我的设备 / 近期文件)
+        GoRoute(
+          path: '/home',
+          name: 'home',
+          builder: (context, state) => const HomePage(),
+        ),
+
+        // 预览 (3D 渲染)
+        GoRoute(
+          path: '/preview',
+          name: 'preview',
+          builder: (context, state) => const RendererPage(),
+        ),
+
+        // 设备控制
+        GoRoute(
+          path: '/device-control',
+          name: 'deviceControl',
+          builder: (context, state) => _withScaffold(
+            context,
+            title: '设备控制',
+            body: const DeviceControlFullPage(
+              availableDevices: _defaultDevices,
+            ),
+          ),
+        ),
+      ],
+    ),
+
+    // ── Device management (feature layer, outside shell) ────────────
     GoRoute(
-      path: '/',
+      path: '/device',
       name: 'deviceList',
       builder: (context, state) => const DeviceListPage(),
       routes: [
         GoRoute(
-          path: 'device/:id',
+          path: ':id',
           name: 'deviceDetail',
           builder: (context, state) {
             final deviceId = state.pathParameters['id']!;
@@ -28,7 +92,7 @@ final appRouter = GoRouter(
           },
         ),
         GoRoute(
-          path: 'device/discover',
+          path: 'discover',
           name: 'deviceDiscovery',
           builder: (context, state) => const DeviceDiscoveryPage(),
         ),
@@ -36,3 +100,23 @@ final appRouter = GoRouter(
     ),
   ],
 );
+
+/// Wrap a body widget in a [Scaffold] with an optional [AppBar].
+Widget _withScaffold(
+  BuildContext context, {
+  String? title,
+  List<Widget>? actions,
+  required Widget body,
+}) {
+  final theme = Theme.of(context);
+  return Scaffold(
+    backgroundColor: theme.colorScheme.surface,
+    appBar: title != null
+        ? AppBar(
+            title: Text(title),
+            actions: actions,
+          )
+        : null,
+    body: body,
+  );
+}
