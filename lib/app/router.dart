@@ -3,9 +3,8 @@
 /// Shell:  MainFramePage (top tabs: 首页 / 预览 / 设备控制)
 ///   /                → redirects to /home
 ///   /home            → HomePage (sidebar: 模型库 / 我的设备 / 近期文件)
-///   /home-standby   → HomeStandbyPage (Figma 首页-待机状态 redesign)
 ///   /preview         → RendererPage (3D 渲染预览)
-///   /device-control  → DeviceControlFullPage
+///   /device-control  → HomeStandbyPage (Figma 首页-待机状态)
 ///
 /// Outside shell:
 ///   /component-demo → ComponentDemoPage
@@ -20,12 +19,11 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_zero_copy/pages/main_frame_page.dart';
 import 'package:flutter_zero_copy/pages/home/home_page.dart';
 import 'package:flutter_zero_copy/pages/renderer/renderer_page.dart';
-import 'package:flutter_zero_copy/pages/device/device_control_full_page.dart';
+import 'package:flutter_zero_copy/pages/home_standby_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_list_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_detail_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_discovery_page.dart';
 import 'package:flutter_zero_copy/pages/component_demo_page.dart';
-import 'package:flutter_zero_copy/pages/home_standby_page.dart';
 
 /// Top-level router configuration.
 final appRouter = GoRouter(
@@ -58,17 +56,10 @@ final appRouter = GoRouter(
           builder: (context, state) => const RendererPage(),
         ),
 
-        // 设备控制 (SN 可通过 query parameter 传入: ?sn=xxx)
+        // 设备控制 (Figma 首页-待机状态 redesign, frame 10977:31300)
         GoRoute(
           path: '/device-control',
           name: 'deviceControl',
-          builder: (context, state) => const DeviceControlFullPage(),
-        ),
-
-        // 首页-待机状态 (Figma redesign)
-        GoRoute(
-          path: '/home-standby',
-          name: 'homeStandby',
           builder: (context, state) => const HomeStandbyPage(),
         ),
       ],
