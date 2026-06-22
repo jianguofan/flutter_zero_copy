@@ -59,4 +59,37 @@ class MqttCredentials {
       ];
 
   static String defaultPublishTopic(String sn) => '$sn/request';
+
+  /// Serialize to JSON for persistence (certificates included as PEM strings).
+  Map<String, dynamic> toJson() => {
+        'host': host,
+        'port': port,
+        'clientId': clientId,
+        'sn': sn,
+        'subscribeTopics': subscribeTopics,
+        'publishTopic': publishTopic,
+        if (ca != null) 'ca': ca,
+        if (cert != null) 'cert': cert,
+        if (key != null) 'key': key,
+      };
+
+  /// Deserialize from JSON (certificates reconstructed from PEM strings).
+  factory MqttCredentials.fromJson(Map<String, dynamic> json) {
+    final ca = json['ca'] as String?;
+    final cert = json['cert'] as String?;
+    final key = json['key'] as String?;
+
+    return MqttCredentials(
+      host: json['host'] as String,
+      port: json['port'] as int,
+      clientId: json['clientId'] as String,
+      sn: json['sn'] as String,
+      subscribeTopics: (json['subscribeTopics'] as List?)?.cast<String>() ?? [],
+      publishTopic: json['publishTopic'] as String? ?? '',
+      ca: ca,
+      cert: cert,
+      key: key,
+      // SecurityContext is reconstructed at connection time via getOrCreateSecurityContext()
+    );
+  }
 }

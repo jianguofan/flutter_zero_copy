@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_session_provider.dart';
+import 'package:flutter_zero_copy/features/device/data/adapters/lava_sdk_connection.dart';
+import 'package:flutter_zero_copy/features/device/data/certificate_storage.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
 import 'package:uuid/uuid.dart';
 
@@ -220,30 +222,62 @@ class _DeviceDiscoveryPageState extends ConsumerState<DeviceDiscoveryPage>
       return;
     }
 
+    final accessCode = _lanAccessCodeController.text.trim();
+    if (accessCode.isEmpty) {
+      setState(() => _error = 'Please enter an access code');
+      return;
+    }
+
     setState(() {
       _isConnecting = true;
       _error = null;
     });
 
     try {
+      // Execute real LAN connection (may prompt device auth)
+      final conn = await LavaSdkConnection.createLan(
+        ip: ip,
+        accessCode: accessCode,
+      );
+
+      if (conn == null) {
+        setState(() => _error = 'Connection failed — check IP and access code, '
+            'and make sure the device is on the same network.');
+        return;
+      }
+
+      // Persist certificate for future reconnections
+      if (conn.credentials?.hasTlsCredentials == true) {
+        await CertificateStorage.save(conn.credentials!);
+      }
+
+      // Register device in local registry
+      final sn = conn.credentials?.sn ?? 'LAN-$ip';
       final registry = ref.read(deviceRegistryProvider);
       final deviceId = const Uuid().v4();
 
       final device = DeviceInfo(
         id: deviceId,
-        name: 'Printer ($ip)',
-        sn: 'LAN-$ip',
+        name: 'Printer ($sn)',
+        sn: sn,
         networkType: NetworkType.lan,
         ipAddress: ip,
-        accessCode: _lanAccessCodeController.text,
+        accessCode: accessCode,
         createdAt: DateTime.now(),
       );
 
       await registry.register(device);
 
+      // Dispose the temporary connection (session will create its own)
+      await conn.dispose();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Device added successfully')),
+          SnackBar(
+            content: Text(conn.credentials?.hasTlsCredentials == true
+                ? 'Device authorized — certificate cached'
+                : 'Device added ($sn)'),
+          ),
         );
         context.pop();
       }

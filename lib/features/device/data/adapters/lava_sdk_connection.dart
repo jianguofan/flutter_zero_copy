@@ -19,7 +19,11 @@ class LavaSdkConnection implements IConnection {
   StreamSubscription? _connectionStateSub;
   ConnectionStatus _status = ConnectionStatus.idle;
 
-  LavaSdkConnection._(this._client)
+  /// The credentials used to establish this connection.
+  /// Contains raw TLS certificate strings for caching via [CertificateStorage].
+  final MqttCredentials? credentials;
+
+  LavaSdkConnection._(this._client, {this.credentials})
       : _statusController = StreamController<ConnectionStatus>.broadcast(),
         _messageController = StreamController<DeviceMessage>.broadcast() {
     _listenToTransport();
@@ -29,6 +33,10 @@ class LavaSdkConnection implements IConnection {
   // ── Factory methods ──
 
   /// Create a LAN connection via [DeviceHub.connectLan].
+  ///
+  /// Returns the connection with [credentials] populated (ca/cert/key PEM strings)
+  /// for persisting via [CertificateStorage].
+  /// Returns null if the connection or authorization failed.
   static Future<LavaSdkConnection?> createLan({
     required String ip,
     int authPort = 1884,
@@ -42,7 +50,24 @@ class LavaSdkConnection implements IConnection {
       schema: schema,
     );
     if (result == null) return null;
-    return LavaSdkConnection._(result.client);
+    return LavaSdkConnection._(result.client, credentials: result.credentials);
+  }
+
+  /// Create a connection using previously cached [MqttCredentials].
+  ///
+  /// Skips the LAN auth flow entirely — connects directly via TLS.
+  /// Returns null if the connection failed (e.g., expired cert).
+  static Future<LavaSdkConnection?> createWithCredentials(
+    MqttCredentials creds, {
+    DeviceSchema? schema,
+  }) async {
+    final result = await DeviceHub.connectWithCredentials(
+      creds,
+      schema: schema,
+    );
+    if (result == null) return null;
+    return LavaSdkConnection._(result.client,
+        credentials: result.credentials);
   }
 
   /// Create a WAN connection via [DeviceHub.connectWan].
@@ -63,7 +88,7 @@ class LavaSdkConnection implements IConnection {
       schema: schema,
     );
     if (result == null) return null;
-    return LavaSdkConnection._(result.client);
+    return LavaSdkConnection._(result.client, credentials: result.credentials);
   }
 
   // ── IConnection implementation ──
@@ -118,7 +143,8 @@ class LavaSdkConnection implements IConnection {
   ConnectionInfo get info => ConnectionInfo(
         type: 'mqtt',
         endpoint: 'device',
-        isSecure: false,
+        isSecure: credentials?.securityContext != null ||
+            credentials?.hasTlsCredentials == true,
       );
 
   // ── Internal ──
@@ -140,11 +166,7 @@ class LavaSdkConnection implements IConnection {
   }
 
   /// Bridge SDK [DeviceClient.connectionState] to [IConnection.statusStream].
-  /// This replaces manual status tracking — the SDK's [MqttTransport] is the
-  /// authoritative source for connection state (including automatic reconnects).
   void _listenToConnectionState() {
-    // Initial state: DeviceHub already called client.connect(), so we start
-    // from the transport's actual state rather than assuming idle.
     if (_client.isConnected) {
       _setStatus(ConnectionStatus.connected);
     }

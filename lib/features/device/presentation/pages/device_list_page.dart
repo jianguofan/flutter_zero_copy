@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_list_provider.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_session_provider.dart';
+import 'package:flutter_zero_copy/features/device/data/certificate_storage.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
 import 'package:flutter_zero_copy/features/device/domain/interfaces/i_device_facade.dart';
 import 'package:flutter_zero_copy/features/device/domain/interfaces/i_device_session.dart';
@@ -146,6 +147,8 @@ class DeviceListPage extends ConsumerWidget {
   Future<void> _deleteDevice(WidgetRef ref, DeviceInfo device) async {
     final registry = ref.read(deviceRegistryProvider);
     await registry.unregister(device.id);
+    // Also clean up cached certificate
+    await CertificateStorage.delete(device.sn);
     ref.invalidate(deviceListProvider);
   }
 }

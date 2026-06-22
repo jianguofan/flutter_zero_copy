@@ -1,4 +1,5 @@
 import 'package:flutter_zero_copy/features/device/data/adapters/lava_sdk_connection.dart';
+import 'package:flutter_zero_copy/features/device/data/certificate_storage.dart';
 import 'package:flutter_zero_copy/features/device/data/models/device_impl.dart';
 import 'package:flutter_zero_copy/features/device/application/providers/device_metadata_store_provider.dart';
 import 'package:flutter_zero_copy/features/device/domain/entities/device_info.dart';
@@ -119,10 +120,29 @@ class DeviceSessionImpl implements IDeviceSession {
 
   Future<IConnection?> _createConnection(DeviceInfo info) async {
     if (info.networkType == NetworkType.lan) {
-      return LavaSdkConnection.createLan(
+      // 1) Try cached certificate first (skip auth)
+      final cached = await CertificateStorage.load(info.sn);
+      if (cached != null) {
+        try {
+          final conn = await LavaSdkConnection.createWithCredentials(cached);
+          if (conn != null) return conn;
+        } catch (_) {
+          // Cached cert failed — fall through to full auth
+        }
+      }
+
+      // 2) Full LAN auth flow
+      final conn = await LavaSdkConnection.createLan(
         ip: info.ipAddress!,
         accessCode: info.accessCode ?? '12345678',
       );
+
+      // 3) Persist certificate for future reconnections
+      if (conn?.credentials?.hasTlsCredentials == true) {
+        await CertificateStorage.save(conn!.credentials!);
+      }
+
+      return conn;
     }
     // WAN not implemented yet (Phase 2)
     return null;
