@@ -7,6 +7,7 @@ const _mainTabs = [
   TopNavTab(label: '首页', path: '/home', icon: Icons.home),
   TopNavTab(label: '预览', path: '/preview'),
   TopNavTab(label: '设备控制', path: '/device-control'),
+  TopNavTab(label: '监控', path: '/device-monitor'),
 ];
 
 /// Main application frame used as the [ShellRoute] builder.

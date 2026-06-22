@@ -24,6 +24,7 @@ import 'package:flutter_zero_copy/features/device/presentation/pages/device_list
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_detail_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_discovery_page.dart';
 import 'package:flutter_zero_copy/pages/component_demo_page.dart';
+import 'package:flutter_zero_copy/features/device_monitor/presentation/device_monitor_page.dart';
 
 /// Top-level router configuration.
 final appRouter = GoRouter(
@@ -61,6 +62,13 @@ final appRouter = GoRouter(
           path: '/device-control',
           name: 'deviceControl',
           builder: (context, state) => const DeviceControlPage(),
+        ),
+
+        // 设备监控 (连接元数据 + 事件搜集)
+        GoRoute(
+          path: '/device-monitor',
+          name: 'deviceMonitor',
+          builder: (context, state) => const DeviceMonitorPage(),
         ),
       ],
     ),
