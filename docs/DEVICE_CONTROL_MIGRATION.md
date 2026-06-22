@@ -1,282 +1,239 @@
-# 🎉 设备控制页面 UI 迁移完成报告
+# 📐 设备控制页面 — 架构设计文档
 
-> 完成时间：2026-06-16  
-> 项目：flutter_zero_copy  
-> 状态：✅ 完成
-
----
-
-## ✅ 新增组件清单
-
-### 设备控制相关（5个新组件）
-
-1. **`lib/pages/device/widgets/device_camera_view.dart`**
-   - 摄像头视图组件
-   - 显示摄像头画面或空状态
-   - 播放按钮和状态提示
-
-2. **`lib/pages/device/widgets/device_control_left_panel.dart`**
-   - 左侧温度控制面板
-   - 4个挤出头温度显示
-   - 热床温度显示
-   - 腔体温度显示
-   - LED开关、速度控制、风扇控制
-
-3. **`lib/pages/device/widgets/device_control_right_panel.dart`**
-   - 右侧XYZ轴控制面板
-   - XY轴方向控制（前出头、向床）
-   - Z轴升降控制
-   - 取出料头按钮
-
-4. **`lib/pages/device/widgets/device_print_task_view.dart`**
-   - 打印任务视图
-   - 任务名称和状态
-   - 3D模型预览区域
-   - 进度百分比显示
-   - 层数和预计时间
-   - 控制按钮（播放/暂停）
-
-5. **`lib/pages/device/widgets/device_filament_view.dart`**
-   - 耗材管理视图
-   - 4个耗材槽显示
-   - 耗材类型标签（PETG、ABS、PLA）
-   - 颜色和编号显示
-   - 编辑/查看图标
-
-### 集成页面（1个）
-
-6. **`lib/pages/device/device_control_full_page.dart`**
-   - 完整的设备控制页面
-   - 集成所有子组件
-   - 3个Tab切换：控制、打印任务、耗材
-   - 设备选择器集成
-   - 摄像机/视频切换
+> 更新：2026-06-18
+> 状态：✅ Figma 重设计 + Riverpod 架构重构完成
 
 ---
 
-## 🎨 UI 还原度
+## 架构概览
 
-### 对比设计图实现情况
+```
+                        MQTT (高频遥测, 10+ Hz)
+                             │
+              写入全部设备    │  全量更新 Map<SN, DeviceMetadata>
+                             ▼
+              ┌──────────────────────────────┐
+              │   Global Layer                │
+              │   DeviceMetadataStore         │ ← 全设备数据存储，中间件（校验/合并/staleness）
+              │   DeviceMetadataStoreNotifier │ ← StateNotifier, 发布 Map 变化
+              └──────────────┬───────────────┘
+                             │
+          ref.listen()       │ 只取当前 SN 的设备
+          + 200ms throttle   │
+                             ▼
+              ┌──────────────────────────────┐
+              │   Page ViewModel Layer         │
+              │   DeviceControlViewModel      │ ← FamilyNotifier<PageState, String>
+              │   (keyed by SN)               │
+              │                               │
+              │   职责:                        │
+              │   1. 从 Store 扁平化为 PageState │
+              │   2. 200ms 温度节流             │
+              │   3. 管理页面 UI 状态           │
+              │   4. 暴露操作方法               │
+              └──────────────┬───────────────┘
+                             │
+       state = PageState     │ 细粒度 select()
+                             ▼
+   ┌───────────┬──────────────┬──────────────┬──────────────┐
+   │ TempPanel │  XYZPanel    │  PrintTask   │  Camera      │
+   │ select:   │  select:     │  select:     │  select:     │
+   │ temps,    │  tool,       │  progress,   │  cameraTab   │
+   │ fans      │  step        │  layers      │              │
+   │           │              │              │              │
+   │ Repaint   │  Repaint     │  Repaint     │  Repaint     │
+   │ Boundary  │  Boundary    │  Boundary    │  Boundary    │
+   └───────────┴──────────────┴──────────────┴──────────────┘
+```
 
-#### 图1：摄像头视图 ✅
-- ✅ 左侧设备名称（lxk-test）
-- ✅ 左侧菜单（设备控制）
-- ✅ 摄像机/视频Tab切换
-- ✅ 黑色画面区域
-- ✅ 播放按钮图标
-- ✅ "摄像头未开启"提示文字
+### 关键设计决策
 
-#### 图2：控制面板 ✅
-- ✅ 左侧温度列表（4个挤出头 + 热床 + 腔体）
-- ✅ 温度显示格式（27/0°C）
-- ✅ LED开关
-- ✅ 速度显示（100%）
-- ✅ 右侧XY轴控制（中心XY标签，前出头/向床标注）
-- ✅ Z轴控制（上下箭头）
-- ✅ 取出料头按钮
-- ✅ 工具/精度选择器（顶部）
-
-#### 图3：打印任务 ✅
-- ✅ 状态标签（空闲）
-- ✅ 任务名称（lxk-test）
-- ✅ 3D模型预览框（带无模型提示）
-- ✅ 进度百分比显示（0%）
-- ✅ 层数显示（0/0）
-- ✅ 预计时间（0h 0m）
-- ✅ 进度条
-- ✅ 播放按钮
-
-#### 图4：耗材视图 ✅
-- ✅ 标题栏（耗材 + 刷新/帮助按钮）
-- ✅ 4个耗材槽横向排列
-- ✅ 耗材颜色圆圈（蓝、灰、橙、黑）
-- ✅ 编号显示（1、2、3、4）
-- ✅ 类型标签（PETG、ABS、PLA）
-- ✅ 编辑/查看图标
+| 问题 | 方案 | 理由 |
+|------|------|------|
+| 全局 Store 变化触发全量重建 | ViewModel + `select()` 细粒度 | 只有值变化的叶子 widget 重建 |
+| 温度 MQTT 10+ Hz 推送 | ViewModel 200ms throttle | UI 刷新 ≤5 Hz，感知延迟可接受 |
+| 页面 UI 状态放哪 | PageState 内（非 Store） | selectedTool / selectedStep 是纯 UI 状态 |
+| 子组件如何读数据 | `ref.watch(provider.select(...))` | 精确到字段级别比较 |
+| 如何隔离重绘 | `RepaintBoundary` 包裹各区域 | 阻止兄弟区域不必要的重绘传播 |
 
 ---
 
-## 📊 组件统计
+## 文件结构
 
-| 组件类型 | 数量 | 说明 |
-|---------|------|------|
-| 新建组件 | 6个 | 设备控制相关 |
-| 修改文件 | 1个 | ui_demo_page.dart |
-| 代码行数 | ~800行 | 新增代码 |
-
-**累计组件总数**: 16个文件
-
----
-
-## 🎯 功能特性
-
-### 已实现功能
-- ✅ 3个Tab页面切换（控制、打印任务、耗材）
-- ✅ 摄像机/视频切换
-- ✅ 设备连接状态显示
-- ✅ 温度监控显示（挤出头、热床、腔体）
-- ✅ XYZ轴控制交互
-- ✅ 工具和精度选择
-- ✅ LED/速度/风扇控制
-- ✅ 打印任务进度显示
-- ✅ 耗材状态管理
-- ✅ 未连接设备空状态
-
-### 可交互元素
-- ✅ Tab切换
-- ✅ 设备选择下拉菜单
-- ✅ 摄像机/视频切换按钮
-- ✅ XYZ方向控制按钮
-- ✅ 取出料头按钮
-- ✅ 工具选择器（Tool1-4）
-- ✅ 精度选择器（10mm/1mm/0.1mm）
-- ✅ LED开关
-- ✅ 耗材槽点击
-- ✅ 刷新按钮
-
----
-
-## 🔍 代码质量
-
-### 静态分析结果
-```bash
-flutter analyze lib/pages/device
 ```
-
-**结果**: ✅ 通过
-- 47个信息提示（文档注释建议）
-- 3个排序建议
-- 0个错误
-- 0个警告
-
-### 设计模式
-- ✅ 组件化设计（高度可复用）
-- ✅ 状态管理清晰
-- ✅ Material3 主题适配
-- ✅ 响应式布局
-- ✅ 代码结构清晰
-
----
-
-## 📐 布局结构
-
-### 控制Tab布局
-```
-┌─────────────────────────────────────────────────┐
-│ 设备选择器                                        │
-├────────┬─────────────────────────┬───────────────┤
-│        │ 摄像机 | 视频             │              │
-│ 温度   ├─────────────────────────┤   XYZ控制    │
-│ 控制   │                         │              │
-│ 面板   │    摄像头画面区域         │   (方向按钮)  │
-│        │                         │              │
-│        │                         │              │
-└────────┴─────────────────────────┴───────────────┘
-```
-
-### 打印任务Tab布局
-```
-┌─────────────────────────────────────────────────┐
-│ [空闲] lxk-test                                  │
-│                                                  │
-│  ┌────────┐    XXX                              │
-│  │ 3D模型 │    0%                                │
-│  │ 预览   │    0/0                               │
-│  └────────┘    — 0h 0m                          │
-│                                                  │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ (进度条)      │
-│                                                  │
-│              ⏯️ (播放按钮)                        │
-└─────────────────────────────────────────────────┘
-```
-
-### 耗材Tab布局
-```
-┌─────────────────────────────────────────────────┐
-│ 耗材                                  🔄  ❓     │
-│                                                  │
-│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐       │
-│  │  🔵1 │  │  ⚫2 │  │  🟠3 │  │  ⚫4 │       │
-│  │ PETG │  │ ABS  │  │ PLA  │  │ PLA  │       │
-│  │  ✏️  │  │  ✏️  │  │  👁️  │  │  ✏️  │       │
-│  └──────┘  └──────┘  └──────┘  └──────┘       │
-└─────────────────────────────────────────────────┘
+lib/pages/device/
+├── state/
+│   └── device_control_page_state.dart   ← 不可变 PageState, ==/hashCode
+├── viewmodel/
+│   └── device_control_viewmodel.dart    ← FamilyNotifier, 节流, UI 操作
+├── device_control_full_page.dart        ← ConsumerWidget, 左右布局
+└── widgets/
+    ├── device_camera_view.dart          ← 摄像头画面 + 耗材指示
+    ├── device_control_left_panel.dart   ← 温度 + 风扇滑块
+    ├── device_control_right_panel.dart  ← XYZ 控制 + Tool/Step 选择器
+    ├── device_print_task_view.dart      ← 打印进度 + 3D 预览
+    ├── device_filament_view.dart        ← 耗材槽管理
+    └── device_empty_state.dart          ← 未连接状态
 ```
 
 ---
 
-## 🚀 运行状态
+## 数据流详解
 
-**应用状态**: ✅ 正在启动
+### 1. Global → Page
 
-**运行命令**:
-```bash
-flutter run -d macos
+```dart
+// DeviceControlViewModel.build(sn)
+ref.listen(deviceMetadataStoreProvider, (prev, next) {
+  final device = next[sn];          // 只取当前设备
+  if (device != null) _onStoreChanged(device);
+});
 ```
 
-**预期效果**:
-1. 应用启动后显示4个Tab导航
-2. 切换到"设备"Tab
-3. 选择已连接设备（Snapmaker A350）
-4. 查看3个子Tab：
-   - 控制：左侧温度、中间摄像头、右侧XYZ控制
-   - 打印任务：任务信息和进度
-   - 耗材：4个耗材槽
+### 2. 节流合并
+
+```dart
+void _onStoreChanged(DeviceMetadata meta) {
+  _pendingMeta = meta;
+  _throttleTimer?.cancel();
+  _throttleTimer = Timer(200.ms, () {
+    final newState = state.mergeTelemetry(_pendingMeta!);
+    if (newState != state) state = newState;  // 值不同才发布
+  });
+}
+```
+
+### 3. UI 细粒度监听
+
+```dart
+// 只有 progress 字段变化才重建此 widget
+final progress = ref.watch(
+  deviceControlViewModelProvider(sn).select((s) => s.progress),
+);
+```
+
+### 4. `mergeTelemetry` 短路
+
+```dart
+// 200ms 窗口内遥测无实质变化 → 返回同一对象 → UI 不重建
+if (newNozzleTemp == nozzleTemp1 &&
+    newBedTemp == bedTemp &&
+    newProgress == progress) {
+  return this;  // 短路！
+}
+```
 
 ---
 
-## 📝 下一步优化
+## PageState 字段清单
 
-### 数据对接
-1. 对接实际设备温度数据
-2. 实现摄像头视频流
-3. 对接打印任务实时进度
-4. 连接耗材管理接口
-
-### 功能增强
-1. XYZ轴控制实际移动
-2. 温度设置功能
-3. LED/风扇控制实现
-4. 打印任务暂停/继续
-5. 耗材更换流程
-
-### UI优化
-1. 添加加载动画
-2. 完善错误提示
-3. 优化交互反馈
-4. 添加温度曲线图
-5. 实现摄像头录像功能
-
----
-
-## ✨ 核心亮点
-
-1. **完整还原设计图** - UI细节高度还原
-2. **模块化设计** - 每个功能独立组件
-3. **可扩展性强** - 易于添加新功能
-4. **响应式布局** - 适配不同屏幕
-5. **Material3** - 现代化设计语言
-6. **代码质量高** - 清晰的结构和注释
+| 来源 | 字段 | 类型 | 说明 |
+|------|------|------|------|
+| Store | `sn` | `String` | 设备序列号 |
+| Store | `displayName` | `String` | 展示名称 |
+| Store | `connectionState` | `DeviceConnectionState` | 8 状态机 |
+| Store | `nozzleTemp1-4` | `double` | 4 个挤出机温度 |
+| Store | `bedTemp` | `double` | 热床温度 |
+| Store | `chamberTemp` | `double` | 腔体温度 |
+| Store | `progress` | `int` | 打印进度 0-100 |
+| Store | `taskName` | `String?` | 打印任务文件名 |
+| Store | `currentLayer` / `totalLayers` | `int` | 层数信息 |
+| Store | `remainingMinutes` | `int` | 剩余时间 |
+| Store | `filamentUsed` | `double` | 已用耗材 |
+| Store | `mainFanSpeed` / `auxFanSpeed` / `exhaustFanSpeed` | `int` | 3 路风扇 |
+| UI | `selectedTool` | `int` | 当前工具头 1-4 |
+| UI | `selectedStep` | `String` | 步进精度 |
+| UI | `cameraTabIndex` | `int` | 摄像机/视频 Tab |
+| UI | `isLedOn` | `bool` | LED 开关 |
 
 ---
 
-## 📚 文件位置
+## Figma 布局
 
-**新增组件**:
-- `lib/pages/device/widgets/device_camera_view.dart`
-- `lib/pages/device/widgets/device_control_left_panel.dart`
-- `lib/pages/device/widgets/device_control_right_panel.dart`
-- `lib/pages/device/widgets/device_print_task_view.dart`
-- `lib/pages/device/widgets/device_filament_view.dart`
-- `lib/pages/device/device_control_full_page.dart`
+```
+┌──────────────────────────────────────────────────┐
+│ Top Nav (dark)                            1440x72 │
+├──────────┬───────────────────────────────────────┤
+│ Sidebar  │ Main (scrollable)                     │
+│ 262px    │                                       │
+│          │ ┌─ Camera Section (535x339) ────────┐ │
+│ 设备控制  │ │ 摄像机 | Video   ●●●● 耗材       │ │
+│ (active) │ │         [▶ Play]                  │ │
+│          │ ├───────────────────────────────────┤ │
+│ 固件更新  │ │ UnLoad                           │ │
+│          │ ├───────────────────────────────────┤ │
+│          │ │ ┌─ 打印任务 ────────────────────┐ │ │
+│          │ │ │ [preview] 34% 多色老虎.STL    │ │ │
+│          │ │ │ ████░░░░ 0/2100 2h 34m       │ │ │
+│          │ │ └──────────────────────────────┘ │ │
+│          │ ├───────────────────────────────────┤ │
+│          │ │ ┌─ 控制 ────────────────────────┐ │ │
+│          │ │ │ 1: 120℃/160℃   Tool1 Tool2.. │ │ │
+│          │ │ │ 2: 120℃/160℃   放回打印头     │ │ │
+│          │ │ │ 3: 120℃/160℃      [↑]        │ │ │
+│          │ │ │ 4: 120℃/160℃   [←][XY][→]    │ │ │
+│          │ │ │ Bed: 50℃/50℃      [↓]        │ │ │
+│          │ │ │ Fan1 ██░░ 25%   挤出机 热床   │ │ │
+│          │ │ │ Fan2 █░░░ 0%    10mm 1mm 0.1  │ │ │
+│          │ │ └──────────────────────────────┘ │ │
+└──────────┴───────────────────────────────────────┘
+```
 
-**文档**:
-- `docs/UI_MIGRATION_COMPLETE.md` - 初次完成总结
-- `docs/INTEGRATION_TEST_REPORT.md` - 集成测试报告
-- `docs/DEVICE_CONTROL_MIGRATION.md` - 本文档（设备控制迁移）
+### Figma 色彩参考
+
+| 用途 | 颜色值 |
+|------|--------|
+| Primary blue | `#0D64E6` |
+| Dark surface (camera bg) | `#141414` |
+| Light grey surface | `#F5F5FA` |
+| Selected menu bg | `#0D64E6` |
+| Unselected menu bg | `#F5F5F5` |
+| Text primary | `#242424` |
+| Text secondary | `#545759` |
+| Progress bar fill | `#0D64E6` |
+| Progress bar bg | `#D9D9D9` |
+| Fan slider bg | `#F5F5FA` |
 
 ---
 
-**完成时间**: 2026-06-16  
-**总工作量**: 16个组件，~1800行代码  
-**测试状态**: ✅ 编译通过，应用运行中
+## Router 集成
+
+```dart
+// 通过 query parameter 传入设备 SN
+GoRoute(
+  path: '/device-control',
+  name: 'deviceControl',
+  builder: (context, state) {
+    final sn = state.uri.queryParameters['sn'];
+    return DeviceControlFullPage(initialSn: sn);
+  },
+),
+```
+
+---
+
+## 组件对比：旧 vs 新
+
+| 维度 | 旧实现 (2026-06-16) | 新实现 (2026-06-18) |
+|------|---------------------|---------------------|
+| 状态管理 | StatefulWidget + setState | Riverpod FamilyNotifier |
+| 导航 | TabBar (控制/打印任务/耗材) | 左侧菜单 + 垂直滚动 |
+| 数据源 | 硬编码 `_defaultDevices` | Global DeviceMetadataStore |
+| 重绘控制 | 无 | select() + RepaintBoundary + throttle |
+| 温度显示 | 简单 `27/0°C` | 蓝色编号标签 `120℃/160℃` |
+| XYZ 控制 | 6 个独立方向按钮 | XY 十字圆盘 + 挤出机/热床按钮 |
+| 风扇 | 文字 `100%` | 滑块 + 百分比刻度 |
+| 打印进度 | 线性进度条 | 分段进度条 + 文件名 + 剩余时间 |
+| 摄像头 | 静态播放按钮 | 摄像机/Video Tab + 耗材圆点 + UnLoad |
+| 设备选择 | 顶部下拉框 | 左侧菜单列表 |
+
+---
+
+## 下一步
+
+- [ ] 对接真实设备 MQTT 遥测（当前 Store 结构已就绪）
+- [ ] 实现摄像头视频流
+- [ ] XYZ 轴移动命令对接 `DeviceCommandService`
+- [ ] 耗材数据从 DeviceMetadata 解析
+- [ ] 固件更新页面
+- [ ] 温度变化 < 0.5°C 跳过写入（Store 层节流增强）

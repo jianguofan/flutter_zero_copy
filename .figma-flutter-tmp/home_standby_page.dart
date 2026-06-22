@@ -12,7 +12,6 @@
 // │        │ 535×379             │ 535×379               │
 // └────────┴─────────────────────┴───────────────────────┘
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 // ══════════════════════════════════════════════
 // 主页面
@@ -153,14 +152,14 @@ class _Sidebar extends StatelessWidget {
             const SizedBox(height: 28),
             // 设备控制 — 激活状态
             const _SidebarTile(
-              iconAsset: 'assets/icons/icon_device_control.svg',
+              icon: Icons.settings_remote,
               label: '设备控制',
               selected: true,
             ),
             const SizedBox(height: 10),
             // 固件更新 — 未激活
             const _SidebarTile(
-              iconAsset: 'assets/icons/icon_firmware_update.svg',
+              icon: Icons.system_update,
               label: '固件更新',
               selected: false,
             ),
@@ -173,12 +172,12 @@ class _Sidebar extends StatelessWidget {
 }
 
 class _SidebarTile extends StatelessWidget {
-  final String iconAsset;
+  final IconData icon;
   final String label;
   final bool selected;
 
   const _SidebarTile({
-    required this.iconAsset,
+    required this.icon,
     required this.label,
     required this.selected,
   });
@@ -194,12 +193,7 @@ class _SidebarTile extends StatelessWidget {
       color: bg,
       child: Row(
         children: [
-          SvgPicture.asset(
-            iconAsset,
-            width: 20,
-            height: 20,
-            colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
-          ),
+          Icon(icon, size: 20, color: fg),
           const SizedBox(width: 12),
           Text(
             label,
