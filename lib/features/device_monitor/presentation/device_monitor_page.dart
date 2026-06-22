@@ -151,6 +151,11 @@ class _DeviceMonitorPageState extends State<DeviceMonitorPage> {
   }
 }
 
+String _modeLabel(dynamic mode) {
+  // ConnectionMode enum — avoid .name for runtime safety with dynamic
+  return mode.toString() == 'ConnectionMode.wan' ? 'WAN' : 'LAN';
+}
+
 // ══════════════════════════════════════════════
 // 连接元数据卡片
 // ══════════════════════════════════════════════
@@ -206,9 +211,9 @@ class _MetadataCard extends StatelessWidget {
               ],
             ),
             const Divider(),
-            _MetaRow('模式', config.mode.name.toUpperCase()),
+            _MetaRow('模式', _modeLabel(config.mode)),
             _MetaRow('主机', '${config.host}:${config.port}'),
-            _MetaRow('SN', config.sn),
+            _MetaRow('SN', config.sn ?? '—'),
             _MetaRow('阶段', phase),
             _MetaRow('会话', duration),
           ],
