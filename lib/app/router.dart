@@ -4,7 +4,7 @@
 ///   /                → redirects to /home
 ///   /home            → HomePage (sidebar: 模型库 / 我的设备 / 近期文件)
 ///   /preview         → RendererPage (3D 渲染预览)
-///   /device-control  → HomeStandbyPage (Figma 首页-待机状态)
+///   /device-control  → DeviceControlPage (Figma 首页-待机状态)
 ///
 /// Outside shell:
 ///   /component-demo → ComponentDemoPage
@@ -19,7 +19,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_zero_copy/pages/main_frame_page.dart';
 import 'package:flutter_zero_copy/pages/home/home_page.dart';
 import 'package:flutter_zero_copy/pages/renderer/renderer_page.dart';
-import 'package:flutter_zero_copy/pages/home_standby_page.dart';
+import 'package:flutter_zero_copy/pages/device/device_control_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_list_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_detail_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_discovery_page.dart';
@@ -60,7 +60,7 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/device-control',
           name: 'deviceControl',
-          builder: (context, state) => const HomeStandbyPage(),
+          builder: (context, state) => const DeviceControlPage(),
         ),
       ],
     ),

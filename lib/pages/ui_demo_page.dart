@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_zero_copy/pages/main_frame_page.dart';
 import 'package:flutter_zero_copy/pages/home/home_page.dart';
-import 'package:flutter_zero_copy/pages/device/widgets/device_selector.dart';
-import 'package:flutter_zero_copy/pages/device/device_control_full_page.dart';
-import 'package:flutter_zero_copy/pages/device/widgets/device_filament_view.dart';
+import 'package:flutter_zero_copy/pages/device/device_control_page.dart';
 
 /// UI迁移演示页面
 ///
@@ -16,21 +14,6 @@ class UiMigrationDemoPage extends StatefulWidget {
 }
 
 class _UiMigrationDemoPageState extends State<UiMigrationDemoPage> {
-  // 模拟设备数据
-  final List<DeviceInfo> _availableDevices = [
-    const DeviceInfo(id: '1', name: 'Snapmaker J1', isConnected: false),
-    const DeviceInfo(id: '2', name: 'Snapmaker A350', isConnected: true),
-    const DeviceInfo(id: '3', name: 'Snapmaker 2.0', isConnected: false),
-  ];
-
-  DeviceInfo? _currentDevice;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentDevice = _availableDevices.firstWhere((d) => d.isConnected);
-  }
-
   @override
   Widget build(BuildContext context) {
     return MainFramePage(
@@ -106,9 +89,6 @@ class _UiMigrationDemoPageState extends State<UiMigrationDemoPage> {
 
   /// 设备页面
   Widget _buildDevicePage() {
-    return DeviceControlFullPage(
-      currentDevice: _currentDevice,
-      availableDevices: _availableDevices,
-    );
+    return const DeviceControlPage();
   }
 }
