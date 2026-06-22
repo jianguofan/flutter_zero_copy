@@ -124,3 +124,36 @@ sequenceDiagram
 | **跨进程共享** | `surfaceID` (32-bit 整数) 通过命令行参数传递，C++ 进程用 `IOSurfaceLookup(id)` 查找 |
 | **硬件 vsync 同步** | CVDisplayLink 注册在硬件刷新回调上，而非 Dart Ticker，延迟最低 |
 | **种子同步** | `glFlush()` 原子递增 IOSurface seed，Impeller 检测到 seed 变化后重新采样 |
+
+---
+
+## 简化版：用户视角流程
+
+```mermaid
+flowchart TD
+    User(("👤 用户"))
+
+    User -->|"① 选择 .3mf 文件"| Studio["🖥️ Orca Studio (Flutter)"]
+
+    subgraph Studio["Orca Studio"]
+        direction TB
+        TexBox["📦 纹理框 (Texture widget)<br/>────────<br/>只占一个 Rect 位置<br/>像素由外部进程渲染"]
+        Btn["🔪 切片按钮"]
+    end
+
+    Studio -->|"② Process.start()<br/>传递 surfaceID"| Child["⚙️ orca-slice-engine (C++ 子进程)"]
+
+    subgraph Child["orca-slice-engine"]
+        direction LR
+        Render["🎨 渲染模式<br/>────────<br/>OpenGL → IOSurface<br/>3D 模型实时预览<br/>旋转/缩放/平移"]
+        Slice["🔪 切片模式<br/>────────<br/>3MF → GCode<br/>libslic3r 管线<br/>输出 .gcode 文件"]
+    end
+
+    Child -->|"IOSurface 零拷贝<br/>GPU VRAM 共享"| TexBox
+    Btn -->|"③ 点击切片<br/>MethodChannel 通知"| Child
+    Render -.->|"切换模式"| Slice
+    Slice -->|"④ 进度回调"| Studio
+    Slice -->|"输出"| FS[("💾 文件系统<br/>output.gcode")]
+```
+
+> **关键点**：C++ 子进程是一个独立可执行文件，Flutter 通过 `Process.start()` 启动它。同一个进程负责两件事：空闲时渲染 3D 预览（通过 IOSurface 零拷贝到 Flutter 的 Texture widget）、收到切片指令后切换到切片模式（3MF → GCode）。进程间只传递 surfaceID（32-bit 整数）和命令（切片/暂停/取消）。
