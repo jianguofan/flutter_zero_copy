@@ -5,6 +5,7 @@ import 'package:flutter_zero_copy/widgets/top_navigation_bar.dart';
 /// Main app tabs shown in the top navigation bar.
 const _mainTabs = [
   TopNavTab(label: '首页', path: '/home', icon: Icons.home),
+  TopNavTab(label: '待机', path: '/home-standby'),
   TopNavTab(label: '预览', path: '/preview'),
   TopNavTab(label: '设备控制', path: '/device-control'),
 ];

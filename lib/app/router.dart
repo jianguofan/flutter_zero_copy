@@ -3,10 +3,12 @@
 /// Shell:  MainFramePage (top tabs: 首页 / 预览 / 设备控制)
 ///   /                → redirects to /home
 ///   /home            → HomePage (sidebar: 模型库 / 我的设备 / 近期文件)
+///   /home-standby   → HomeStandbyPage (Figma 首页-待机状态 redesign)
 ///   /preview         → RendererPage (3D 渲染预览)
 ///   /device-control  → DeviceControlFullPage
 ///
 /// Outside shell:
+///   /component-demo → ComponentDemoPage
 ///   /device          → DeviceListPage
 ///   /device/:id      → DeviceDetailPage
 ///   /device/discover → DeviceDiscoveryPage
@@ -19,17 +21,11 @@ import 'package:flutter_zero_copy/pages/main_frame_page.dart';
 import 'package:flutter_zero_copy/pages/home/home_page.dart';
 import 'package:flutter_zero_copy/pages/renderer/renderer_page.dart';
 import 'package:flutter_zero_copy/pages/device/device_control_full_page.dart';
-import 'package:flutter_zero_copy/pages/device/widgets/device_selector.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_list_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_detail_page.dart';
 import 'package:flutter_zero_copy/features/device/presentation/pages/device_discovery_page.dart';
-
-/// Default mock devices for device-control page.
-const _defaultDevices = [
-  DeviceInfo(id: '1', name: 'Snapmaker J1', isConnected: false),
-  DeviceInfo(id: '2', name: 'Snapmaker A350', isConnected: true),
-  DeviceInfo(id: '3', name: 'Snapmaker 2.0', isConnected: false),
-];
+import 'package:flutter_zero_copy/pages/component_demo_page.dart';
+import 'package:flutter_zero_copy/pages/home_standby_page.dart';
 
 /// Top-level router configuration.
 final appRouter = GoRouter(
@@ -62,19 +58,27 @@ final appRouter = GoRouter(
           builder: (context, state) => const RendererPage(),
         ),
 
-        // 设备控制
+        // 设备控制 (SN 可通过 query parameter 传入: ?sn=xxx)
         GoRoute(
           path: '/device-control',
           name: 'deviceControl',
-          builder: (context, state) => _withScaffold(
-            context,
-            title: '设备控制',
-            body: const DeviceControlFullPage(
-              availableDevices: _defaultDevices,
-            ),
-          ),
+          builder: (context, state) => const DeviceControlFullPage(),
+        ),
+
+        // 首页-待机状态 (Figma redesign)
+        GoRoute(
+          path: '/home-standby',
+          name: 'homeStandby',
+          builder: (context, state) => const HomeStandbyPage(),
         ),
       ],
+    ),
+
+    // ── Component demo (outside shell) ─────────────────────────────
+    GoRoute(
+      path: '/component-demo',
+      name: 'componentDemo',
+      builder: (context, state) => const ComponentDemoPage(),
     ),
 
     // ── Device management (feature layer, outside shell) ────────────
