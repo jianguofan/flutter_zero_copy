@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/connection_phase.dart';
+import '../models/connection_config.dart';
 import '../models/heartbeat_state.dart';
 import '../models/link_quality.dart';
 import '../models/metrics_event.dart';
@@ -17,6 +18,43 @@ import '../models/metrics_snapshot.dart';
 /// - 消息/命令计数
 class MockDeviceMonitor extends ChangeNotifier {
   final _random = Random();
+
+  // ── 连接配置（元数据） ──
+  final ConnectionConfig config = const ConnectionConfig(
+    mode: ConnectionMode.lan,
+    host: '192.168.1.100',
+    port: 7125,
+    sn: 'SM-4B-202406-00042',
+    accessCode: '12345678',
+  );
+
+  // ── 模拟 Store 数据 ──
+  final Map<String, dynamic> _storeData = {
+    'print_stats': {
+      'state': 'printing',
+      'filename': 'gear_bracket.gcode',
+      'total_duration': 1432.5,
+      'print_duration': 623.8,
+      'filament_used': 42.3,
+      'progress': 0.47,
+    },
+    'toolhead': {
+      'position': {'x': 120.5, 'y': 85.3, 'z': 15.2},
+      'extruder': {'temperature': 210.0, 'target': 210.0},
+    },
+    'heated_bed': {
+      'temperature': 60.0,
+      'target': 60.0,
+    },
+    'fan': {
+      'speed': 0.85,
+    },
+    'gcode_move': {
+      'speed': 1500,
+      'speed_factor': 1.0,
+      'extrude_factor': 1.0,
+    },
+  };
 
   // ── 连接状态 ──
   ConnectionPhase _phase = ConnectionPhase.disconnected;
@@ -49,6 +87,8 @@ class MockDeviceMonitor extends ChangeNotifier {
   MetricsSnapshot get snapshot => _metrics.snapshot();
   Stream<MetricsEvent> get eventStream => _eventController.stream;
   DateTime? get sessionStart => _sessionStart;
+  Map<String, dynamic> get storeData => Map<String, dynamic>.from(_storeData);
+
   String get phaseLabel {
     switch (_phase) {
       case ConnectionPhase.disconnected: return '未连接';
@@ -129,14 +169,23 @@ class MockDeviceMonitor extends ChangeNotifier {
     _messageTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (_phase != ConnectionPhase.connected) return;
 
-      // 发送消息
-      _metrics.recordMessageSent();
-      _metrics.recordMessageReceived();
+
+      // 模拟收到消息
+      final recvSize = 64 + _random.nextInt(512);
+      _metrics.recordMessageReceived(
+          topic: '/status', size: recvSize);
 
       // 模拟 PUBACK 延迟
       final pubAckDelay =
           Duration(milliseconds: 40 + _random.nextInt(150));
       _metrics.recordPubAckDelay(pubAckDelay);
+
+      // 模拟发送消息（偶尔）
+      if (_random.nextDouble() > 0.5) {
+        final sendSize = 32 + _random.nextInt(256);
+        _metrics.recordMessageSent(
+            topic: '/request', size: sendSize);
+      }
 
       // 偶尔模拟命令
       if (_random.nextDouble() > 0.7) {
@@ -158,6 +207,13 @@ class MockDeviceMonitor extends ChangeNotifier {
         }
       }
 
+      // 模拟 Store 数据变化
+      if (_storeData['print_stats'] is Map) {
+        final stats = _storeData['print_stats'] as Map<String, dynamic>;
+        stats['progress'] = ((stats['progress'] as double) + 0.002)
+            .clamp(0.0, 1.0);
+      }
+
       notifyListeners();
     });
   }
@@ -175,6 +231,25 @@ class MockDeviceMonitor extends ChangeNotifier {
     _transition(ConnectionPhase.disconnected);
     _heartbeat = const HeartbeatState();
     notifyListeners();
+  }
+
+  /// 导出完整数据: metadata + store + metrics + events
+  Map<String, dynamic> exportAll() {
+    return {
+      'metadata': {
+        'mode': config.mode.name,
+        'host': config.host,
+        'port': config.port,
+        'sn': config.sn,
+        'accessCode': config.accessCode,
+        'phase': _phase.name,
+        'sessionStart': _sessionStart?.toIso8601String(),
+        'quality': _quality.name,
+      },
+      'store': _storeData,
+      'metrics': snapshot.toJson(),
+      'events': _metrics.events.map((e) => e.toJson()).toList(),
+    };
   }
 
   /// 导出 JSON 到控制台

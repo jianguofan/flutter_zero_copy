@@ -228,8 +228,25 @@ class ConnectionMetrics {
     }
   }
 
-  void recordMessageSent() => messagesSent++;
-  void recordMessageReceived() => messagesReceived++;
+  /// Decimation factor for message send/receive events.
+  /// Records every Nth message as an event to avoid flooding the timeline.
+  static const int _messageEventDecimation = 5;
+
+  void recordMessageSent({String? topic, int? size}) {
+    messagesSent++;
+    if (messagesSent % _messageEventDecimation == 0) {
+      _addEvent(MetricsEventType.messageSent,
+          data: {'topic': topic ?? '—', 'size': size, 'count': messagesSent});
+    }
+  }
+
+  void recordMessageReceived({String? topic, int? size}) {
+    messagesReceived++;
+    if (messagesReceived % _messageEventDecimation == 0) {
+      _addEvent(MetricsEventType.messageReceived,
+          data: {'topic': topic ?? '—', 'size': size, 'count': messagesReceived});
+    }
+  }
 
   void recordHeartbeat(bool success, {Duration? rtt}) {
     heartbeatsSent++;
@@ -302,6 +319,9 @@ class ConnectionMetrics {
   }
 
   int get eventCount => _eventTimeline.length;
+
+  /// Export all events as a list (for full export).
+  List<MetricsEvent> get events => List<MetricsEvent>.from(_eventTimeline);
 
   MetricsSnapshot snapshot() {
     final sessionDuration = sessionStartTime != null

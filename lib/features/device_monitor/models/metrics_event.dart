@@ -1,4 +1,4 @@
-/// 连接事件类型（13 种）
+/// 连接事件类型（15 种）
 enum MetricsEventType {
   connectAttempt,
   connectSuccess,
@@ -14,6 +14,10 @@ enum MetricsEventType {
   commandTimeout,
   /// Latency sample: data = {link: "A"|"B"|"full", delayMs: 45.2}
   latencySample,
+  /// Message sent: data = {topic: "/request", size: 256}
+  messageSent,
+  /// Message received: data = {topic: "/response", size: 128}
+  messageReceived,
 }
 
 /// 单条连接事件
