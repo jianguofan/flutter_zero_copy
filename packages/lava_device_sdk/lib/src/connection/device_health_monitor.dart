@@ -1,81 +1,33 @@
+// Deprecated: Use SmartHeartbeatManager instead.
+//
+// DeviceHealthMonitor has been superseded by SmartHeartbeatManager which now
+// combines heartbeat sending + health evaluation in a single class.
+//
+// To migrate:
+//   - Replace `DeviceHealthMonitor()` with `SmartHeartbeatManager()`
+//   - All signal inputs (onMqttOnline, onMqttOffline, onHeartbeatResult, etc.)
+//     are now available directly on SmartHeartbeatManager
+//   - Health stream: `healthStream` is on SmartHeartbeatManager
 import 'dart:async';
+import 'smart_heartbeat_manager.dart';
 
-/// Overall device health determined by cross-validating
-/// MQTT Last Will + heartbeat signals.
+/// Deprecated. Use [SmartHeartbeatManager] instead.
 ///
-/// Per the heartbeat optimization design:
-///   healthy    — both signals agree the device is alive and responsive
-///   degraded   — device is reachable but something is wrong
-///                (zombie process, Klipper disconnected, or high latency)
-///   unreachable — device is definitely offline (Last Will triggered)
-enum DeviceHealth { healthy, degraded, unreachable }
-
-/// Reason for a degraded/unreachable state.
-enum HealthChangeReason {
-  mqttDisconnected,   // Last Will triggered → unreachable
-  heartbeatTimeout3x,  // MQTT alive but 3 consecutive heartbeats timed out
-  klipperDisconnected, // Klipper is not connected to Moonraker
-  highLatency,         // RTT > threshold
-  restored,            // Returned to healthy
-  unknown,
-}
-
-/// Event emitted when device health changes.
-class HealthChangeEvent {
-  final DeviceHealth health;
-  final HealthChangeReason reason;
-  final String? detail;
-  final DateTime timestamp;
-
-  HealthChangeEvent({
-    required this.health,
-    required this.reason,
-    this.detail,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
-
-  @override
-  String toString() => 'HealthChangeEvent($health, $reason${detail != null ? " detail: $detail" : ""})';
-}
-
-/// Monitors device health by cross-validating two signals:
+/// Monitors device health by cross-validating MQTT Last Will + heartbeat signals.
 ///
-/// Signal 1: MQTT Last Will — detects disconnect/power-off (TCP-level)
-/// Signal 2: Heartbeat (server.info) — detects zombie processes (app-level)
-///
-/// The two signals' blind spots don't overlap:
-///   - Last Will alone can't detect zombie (TCP still alive but app dead)
-///   - Heartbeat alone can't distinguish WiFi drop from zombie
-///   - Together: Last Will=online + heartbeat=timeout → zombie
-///
-/// Usage:
-/// ```dart
-/// final monitor = DeviceHealthMonitor();
-/// monitor.healthStream.listen((event) {
-///   switch (event.health) {
-///     case DeviceHealth.unreachable: showOffline();
-///     case DeviceHealth.degraded: showWarning(event.reason);
-///     case DeviceHealth.healthy: showOk();
-///   }
-/// });
-///
-/// // Wire up signals:
-/// mqttClient.onNotification((msg) {
-///   if (msg['server'] == 'online') monitor.onMqttOnline();
-///   if (msg['server'] == 'offline') monitor.onMqttOffline();
-/// });
-/// heartbeat.onResult((ok, rtt) => monitor.onHeartbeatResult(ok, rtt: rtt));
-/// ```
+/// This class is kept for backward compatibility. New code should use
+/// [SmartHeartbeatManager] which provides the same health monitoring
+/// plus integrated heartbeat management.
 class DeviceHealthMonitor {
   final int maxHeartbeatFailures;
   final Duration highLatencyThreshold;
 
   // Signal states
-  bool _mqttAlive = false; // Assume offline until proven otherwise
+  bool _mqttAlive = false;
   int _hbFailCount = 0;
   Duration? _lastRtt;
   DateTime? _lastHbOk;
-  bool _klippyConnected = true; // Assume ok until told otherwise
+  bool _klippyConnected = true;
 
   DeviceHealth _health = DeviceHealth.unreachable;
   HealthChangeReason _lastReason = HealthChangeReason.unknown;
@@ -115,11 +67,6 @@ class DeviceHealthMonitor {
   }
 
   /// Call after each heartbeat attempt completes.
-  ///
-  /// [success] — whether the heartbeat got a response.
-  /// [rtt] — round-trip time if successful.
-  /// [klippyConnected] — from server.info response (if available).
-  /// [klippyState] — Klipper state string (ready/printing/paused/error).
   void onHeartbeatResult(
     bool success, {
     Duration? rtt,
@@ -139,8 +86,7 @@ class DeviceHealthMonitor {
     _evaluate(success ? HealthChangeReason.restored : HealthChangeReason.heartbeatTimeout3x);
   }
 
-  /// Update Klipper connection state from an external source
-  /// (e.g., notify_klippy_state_changed notification).
+  /// Update Klipper connection state from an external source.
   void onKlippyStateChanged({required bool connected, String? state}) {
     if (!connected && _klippyConnected) {
       _klippyConnected = false;
@@ -158,12 +104,9 @@ class DeviceHealthMonitor {
     HealthChangeReason reason = trigger;
 
     if (!_mqttAlive) {
-      // Last Will triggered → definitely offline
       newHealth = DeviceHealth.unreachable;
       reason = HealthChangeReason.mqttDisconnected;
     } else if (_hbFailCount >= maxHeartbeatFailures && _hbFailCount > 0) {
-      // MQTT alive but heartbeat keeps failing → zombie process
-      // Check: was it previously healthy? If so, degraded. If never connected, unreachable.
       newHealth = _lastHbOk != null
           ? DeviceHealth.degraded
           : DeviceHealth.unreachable;

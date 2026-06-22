@@ -32,11 +32,21 @@ export 'src/data/metadata_state_manager.dart' show MetadataStateManager;
 export 'src/data/request_tracker_manager.dart'
     show RequestTracker, RequestTrackerManager, RequestState;
 
-// Connection Layer — heartbeat + connection orchestration
-export 'src/connection/smart_heartbeat_manager.dart' show SmartHeartbeatManager;
+// Connection Layer — heartbeat + health + connection orchestration
+export 'src/connection/smart_heartbeat_manager.dart'
+    show
+        SmartHeartbeatManager,
+        HeartbeatResult,
+        HeartbeatState,
+        DeviceHealth,
+        HealthChangeEvent,
+        HealthChangeReason;
 export 'src/connection/device_connection_manager.dart' show DeviceConnectionManager;
-export 'src/connection/device_health_monitor.dart'
-    show DeviceHealth, DeviceHealthMonitor, HealthChangeEvent, HealthChangeReason;
+
+// Deprecated: DeviceHealthMonitor is superseded by SmartHeartbeatManager.
+// The types (DeviceHealth, HealthChangeEvent, HealthChangeReason) are now exported
+// from smart_heartbeat_manager.dart above.
+export 'src/connection/device_health_monitor.dart' show DeviceHealthMonitor;
 export 'src/connection/connection_strategy.dart'
     show ConnectionStrategy, ConnectionProgress;
 export 'src/connection/lan_strategy.dart' show LanStrategy;

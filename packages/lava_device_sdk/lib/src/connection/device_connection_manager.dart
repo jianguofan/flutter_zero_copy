@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:lava_device_sdk/src/connection/device_health_monitor.dart';
 import 'package:lava_device_sdk/src/connection/link_quality_monitor.dart';
 import 'package:lava_device_sdk/src/connection/smart_heartbeat_manager.dart';
 import 'package:lava_device_sdk/src/data/connection_metrics.dart';
@@ -19,8 +18,7 @@ import 'package:lava_device_sdk/src/transport/transport.dart';
 ///     → DeviceTransport (MQTT / WebSocket)
 ///     → MetadataStateManager     ← unified state
 ///     → RequestTrackerManager    ← request timeout + adaptive extension
-///     → SmartHeartbeatManager    ← idle-triggered heartbeat
-///     → DeviceHealthMonitor      ← dual-signal health evaluation
+///     → SmartHeartbeatManager    ← idle-triggered heartbeat + health evaluation
 ///     → LinkQualityMonitor       ← multi-signal link quality (PUBACK + RTT + Delta)
 /// ```
 ///
@@ -32,7 +30,6 @@ class DeviceConnectionManager {
   final MetadataStateManager _stateManager;
   final RequestTrackerManager _requestTracker;
   late final SmartHeartbeatManager _heartbeat;
-  late final DeviceHealthMonitor _healthMonitor;
   late final LinkQualityMonitor _linkMonitor;
 
   StreamSubscription<TransportMessage>? _messageSub;
@@ -50,7 +47,7 @@ class DeviceConnectionManager {
     required DeviceTransport transport,
     MetadataStateManager? stateManager,
     RequestTrackerManager? requestTracker,
-    DeviceHealthMonitor? healthMonitor,
+    SmartHeartbeatManager? heartbeat,
     LinkQualityMonitor? linkMonitor,
     bool isWanMode = false,
     this.onMessage,
@@ -58,15 +55,25 @@ class DeviceConnectionManager {
   })  : _transport = transport,
         _stateManager = stateManager ?? MetadataStateManager(),
         _requestTracker = requestTracker ?? RequestTrackerManager(),
-        _healthMonitor = healthMonitor ?? DeviceHealthMonitor(),
-        _linkMonitor = linkMonitor ?? LinkQualityMonitor(isWanMode: isWanMode);
+        _linkMonitor = linkMonitor ?? LinkQualityMonitor(isWanMode: isWanMode),
+        _heartbeat = heartbeat ??
+            SmartHeartbeatManager(
+              onSendHeartbeat: () async => HeartbeatResult(success: false),
+            );
 
   MetadataStateManager get state => _stateManager;
   RequestTrackerManager get requests => _requestTracker;
   DeviceTransport get transport => _transport;
-  DeviceHealthMonitor get healthMonitor => _healthMonitor;
-  DeviceHealth get health => _healthMonitor.health;
-  Stream<HealthChangeEvent> get healthStream => _healthMonitor.healthStream;
+
+  /// Unified heartbeat + health manager.
+  SmartHeartbeatManager get heartbeat => _heartbeat;
+
+  /// Current device health (delegates to [SmartHeartbeatManager]).
+  DeviceHealth get health => _heartbeat.health;
+
+  /// Stream of health change events (delegates to [SmartHeartbeatManager]).
+  Stream<HealthChangeEvent> get healthStream => _heartbeat.healthStream;
+
   LinkQualityMonitor get linkMonitor => _linkMonitor;
   LinkQuality get linkQuality => _linkMonitor.quality;
   Stream<LinkQualityEvent> get linkQualityStream => _linkMonitor.qualityStream;
@@ -91,11 +98,11 @@ class DeviceConnectionManager {
   /// Connect to the device.
   ///
   /// [onHeartbeat] — called each heartbeat cycle. If provided, should send
-  ///   `server.info` and return the parsed result. If omitted, a default
+  ///   `server.info` and return a [HeartbeatResult]. If omitted, a default
   ///   implementation sends `server.info` via [sendRpc] and parses
   ///   klippy_connected / klippy_state.
   Future<void> connect({
-    Future<Map<String, dynamic>?> Function()? onHeartbeat,
+    Future<HeartbeatResult> Function()? onHeartbeat,
   }) async {
     _heartbeat = SmartHeartbeatManager(
       onSendHeartbeat: onHeartbeat ?? _defaultHeartbeat,
@@ -121,12 +128,12 @@ class DeviceConnectionManager {
     _linkMonitor.start();
 
     // Default: assume MQTT is alive once transport connects
-    _healthMonitor.onMqttOnline();
+    _heartbeat.onMqttOnline();
   }
 
   // ── Heartbeat ──
 
-  Future<void> _defaultHeartbeat() async {
+  Future<HeartbeatResult> _defaultHeartbeat() async {
     final startTime = DateTime.now();
     try {
       final seqId = ++_requestSeq;
@@ -150,28 +157,29 @@ class DeviceConnectionManager {
       final klippyConnected = result?['klippy_connected'] as bool? ?? false;
       final klippyState = result?['klippy_state'] as String?;
 
-      _healthMonitor.onHeartbeatResult(
-        true,
-        rtt: rtt,
-        klippyConnected: klippyConnected,
-        klippyState: klippyState,
-      );
+      // Feed link monitor and metrics (health evaluation is handled by SmartHeartbeatManager)
       _linkMonitor.onHeartbeatResult(true, rtt: rtt);
       metrics?.recordHeartbeat(true, rtt: rtt);
       metrics?.recordFullPathLatency(rtt);
-      // Record Link B (Delta) if available from the link monitor
       final delta = _linkMonitor.lastDelta;
       if (delta != null) {
         metrics?.recordLinkBLatency(delta);
       }
+
+      return HeartbeatResult(
+        success: true,
+        rtt: rtt,
+        klippyConnected: klippyConnected,
+        klippyState: klippyState,
+      );
     } on TimeoutException {
-      _healthMonitor.onHeartbeatResult(false);
       _linkMonitor.onHeartbeatResult(false);
       metrics?.recordHeartbeat(false);
+      return HeartbeatResult(success: false);
     } catch (_) {
-      _healthMonitor.onHeartbeatResult(false);
       _linkMonitor.onHeartbeatResult(false);
       metrics?.recordHeartbeat(false);
+      return HeartbeatResult(success: false);
     }
   }
 
@@ -304,16 +312,16 @@ class DeviceConnectionManager {
   }
 
   void _handleNotification(Map<String, dynamic> json) {
-    // MQTT Last Will (server online/offline)
+    // MQTT Last Will (server online/offline) → SmartHeartbeatManager
     if (json['server'] == 'online') {
-      _healthMonitor.onMqttOnline();
+      _heartbeat.onMqttOnline();
     } else if (json['server'] == 'offline') {
-      _healthMonitor.onMqttOffline();
+      _heartbeat.onMqttOffline();
     }
 
-    // Klipper state changes
+    // Klipper state changes → SmartHeartbeatManager
     if (json['name'] == 'notify_klippy_state_changed') {
-      _healthMonitor.onKlippyStateChanged(
+      _heartbeat.onKlippyStateChanged(
         connected: json['state'] != null,
         state: json['state'] as String?,
       );
@@ -345,7 +353,7 @@ class DeviceConnectionManager {
 
   Future<void> disconnect() async {
     _linkMonitor.stop();
-    _healthMonitor.reset();
+    _heartbeat.reset();
     _heartbeat.stop();
     _requestTracker.stop();
     await _messageSub?.cancel();
@@ -358,7 +366,7 @@ class DeviceConnectionManager {
     await disconnect();
     _stateManager.dispose();
     _requestTracker.dispose();
-    _healthMonitor.dispose();
+    _heartbeat.dispose();
     _linkMonitor.dispose();
     await _transport.dispose();
   }
